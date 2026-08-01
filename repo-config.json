@@ -2,8 +2,8 @@
   "meta": {
     "name": "Katari Extensions",
     "shortName": "katari-ext",
-    "website": "https://github.com/katariapp/katari-extensions",
-    "artifactBaseUrl": "https://raw.githubusercontent.com/katariapp/katari-extensions/repo",
+    "website": "https://github.com/pa2x2/katari-extensions",
+    "artifactBaseUrl": "https://raw.githubusercontent.com/pa2x2/katari-extensions/repo",
     "signingKeyFingerprint": "cd5497fb5905f39b0233a1e6839e44cffb690f4e34f2046a39dc9bff0df0a4d2"
   }
 }

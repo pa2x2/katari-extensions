@@ -5,8 +5,8 @@ on:
     branches:
       - main
     paths-ignore:
-      - '**/*.md'
-      - '.opencode/**'
+      - "**/*.md"
+      - ".opencode/**"
   workflow_dispatch:
 
 permissions:
@@ -68,7 +68,7 @@ jobs:
         uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: "17"
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5.0.2
@@ -110,7 +110,7 @@ jobs:
         uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: "17"
 
       - name: Download unsigned APKs
         if: needs.prepare.outputs.has_builds == 'true'
@@ -154,8 +154,8 @@ jobs:
       - name: Publish generated repository
         shell: bash
         run: |
-          git -C .ci/repo config user.name katariapp-bot
-          git -C .ci/repo config user.email 'katariapp-bot@users.noreply.github.com'
+          git -C .ci/repo config user.name pa2x2-bot
+          git -C .ci/repo config user.email 'pa2x2-bot@users.noreply.github.com'
           git -C .ci/repo add --all
           if git -C .ci/repo diff --cached --quiet; then
             exit 0
