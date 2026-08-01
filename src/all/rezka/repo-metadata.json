@@ -1,0 +1,32 @@
+{
+  "sources": [
+    {
+      "id": 500000001,
+      "lang": "ru",
+      "name": "Rezka Films",
+      "baseUrl": "https://rezka.ag/films",
+      "supportedEntryTypes": ["ANIME"]
+    },
+    {
+      "id": 500000002,
+      "lang": "ru",
+      "name": "Rezka Series",
+      "baseUrl": "https://rezka.ag/series",
+      "supportedEntryTypes": ["ANIME"]
+    },
+    {
+      "id": 500000003,
+      "lang": "ru",
+      "name": "Rezka Cartoons",
+      "baseUrl": "https://rezka.ag/cartoons",
+      "supportedEntryTypes": ["ANIME"]
+    },
+    {
+      "id": 500000004,
+      "lang": "ru",
+      "name": "Rezka Anime",
+      "baseUrl": "https://rezka.ag/anime",
+      "supportedEntryTypes": ["ANIME"]
+    }
+  ]
+}

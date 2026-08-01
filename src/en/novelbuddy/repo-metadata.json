@@ -1,0 +1,11 @@
+{
+  "sources": [
+    {
+      "id": 500000007,
+      "lang": "en",
+      "name": "NovelBuddy",
+      "baseUrl": "https://novelbuddy.me",
+      "supportedEntryTypes": ["BOOK"]
+    }
+  ]
+}

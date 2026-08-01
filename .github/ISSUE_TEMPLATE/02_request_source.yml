@@ -1,0 +1,57 @@
+name: Source request
+description: Suggest a new website source for Katari Extensions
+labels: [enhancement]
+body:
+  - type: input
+    id: name
+    attributes:
+      label: Source name
+      placeholder: Example Source
+    validations:
+      required: true
+
+  - type: input
+    id: url
+    attributes:
+      label: Source URL
+      placeholder: https://example.com
+    validations:
+      required: true
+
+  - type: input
+    id: language
+    attributes:
+      label: Source language
+      placeholder: English
+    validations:
+      required: true
+
+  - type: input
+    id: content-types
+    attributes:
+      label: Content types
+      description: List every type the website serves, including mixed catalogue results.
+      placeholder: Manga, anime, films, series
+    validations:
+      required: true
+
+  - type: textarea
+    id: details
+    attributes:
+      label: Other details
+      description: Mention authentication, regional restrictions, adult content, rate limits, or anti-bot behavior you know about.
+
+  - type: checkboxes
+    id: acknowledgements
+    attributes:
+      label: Acknowledgements
+      options:
+        - label: I confirmed that this source is not already provided by the repository.
+          required: true
+        - label: I searched existing open and closed issues for this source.
+          required: true
+        - label: I checked REMOVED_SOURCES.md and this provider is not listed.
+          required: true
+        - label: The website is publicly reachable without credentials supplied by repository maintainers.
+          required: true
+

@@ -1,0 +1,53 @@
+name: Source URL change
+description: Report a domain or base URL change for an existing source
+labels: [bug]
+body:
+  - type: input
+    id: extension
+    attributes:
+      label: Extension information
+      placeholder: Rezka 2.0.2
+    validations:
+      required: true
+
+  - type: input
+    id: old-url
+    attributes:
+      label: Current URL
+      placeholder: https://old.example.com
+    validations:
+      required: true
+
+  - type: input
+    id: new-url
+    attributes:
+      label: New URL
+      placeholder: https://new.example.com
+    validations:
+      required: true
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence of the change
+      description: Describe the redirect, official announcement, or other evidence connecting the domains.
+    validations:
+      required: true
+
+  - type: textarea
+    id: other-details
+    attributes:
+      label: Other details
+
+  - type: checkboxes
+    id: acknowledgements
+    attributes:
+      label: Acknowledgements
+      options:
+        - label: I tested the latest extension version and confirmed its configured URL is outdated.
+          required: true
+        - label: I confirmed the new URL belongs to the same provider rather than an unrelated clone.
+          required: true
+        - label: I searched existing open and closed issues for this URL change.
+          required: true
+

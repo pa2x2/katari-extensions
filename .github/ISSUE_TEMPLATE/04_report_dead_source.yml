@@ -1,0 +1,48 @@
+name: Dead source report
+description: Report a source whose website has permanently closed
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Use this form only when a provider appears permanently closed. Temporary outages belong in a bug report.
+
+  - type: input
+    id: source
+    attributes:
+      label: Source name
+    validations:
+      required: true
+
+  - type: input
+    id: url
+    attributes:
+      label: Source URL
+      placeholder: https://example.com
+    validations:
+      required: true
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence that the source is permanently closed
+      description: Include relevant public announcements, persistent DNS failure, or other evidence.
+    validations:
+      required: true
+
+  - type: textarea
+    id: other-details
+    attributes:
+      label: Other details
+
+  - type: checkboxes
+    id: acknowledgements
+    attributes:
+      label: Acknowledgements
+      options:
+        - label: I checked the website directly and this is not only an extension failure.
+          required: true
+        - label: I allowed for a temporary outage and found evidence that the closure is permanent.
+          required: true
+        - label: I searched existing open and closed issues for this source.
+          required: true
+

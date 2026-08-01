@@ -1,0 +1,11 @@
+{
+  "sources": [
+    {
+      "id": 500000009,
+      "lang": "en",
+      "name": "ReadNovelFull",
+      "baseUrl": "https://readnovelfull.com",
+      "supportedEntryTypes": ["BOOK"]
+    }
+  ]
+}

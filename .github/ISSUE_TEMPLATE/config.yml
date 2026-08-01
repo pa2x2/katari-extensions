@@ -1,0 +1,12 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Katari application issue
+    url: https://github.com/katariapp/katari/issues/new/choose
+    about: Report problems with the Katari application rather than an extension.
+  - name: Extension repository index
+    url: https://raw.githubusercontent.com/katariapp/katari-extensions/repo/index.json
+    about: View the machine-readable list of published extensions.
+  - name: Private security or removal request
+    url: https://github.com/katariapp/katari-extensions/security/advisories/new
+    about: Privately report vulnerabilities or verified website-owner and legal removal requests.
+

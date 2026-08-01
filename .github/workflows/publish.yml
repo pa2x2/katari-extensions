@@ -1,0 +1,164 @@
+name: Publish extensions
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - '**/*.md'
+      - '.opencode/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-extensions
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    outputs:
+      matrix: ${{ steps.changes.outputs.matrix }}
+      modules: ${{ steps.changes.outputs.modules }}
+      deleted: ${{ steps.changes.outputs.deleted }}
+      has_builds: ${{ steps.changes.outputs.has_builds }}
+      has_changes: ${{ steps.changes.outputs.has_changes }}
+    steps:
+      - name: Check out sources
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Read last published revision
+        id: base
+        shell: bash
+        run: |
+          git fetch origin repo:refs/remotes/origin/repo || true
+          base="$(git show origin/repo:.source-sha 2>/dev/null || true)"
+          echo "sha=$base" >> "$GITHUB_OUTPUT"
+
+      - name: Determine changed modules
+        id: changes
+        run: >-
+          python3 scripts/changed_modules.py
+          --head "$GITHUB_SHA"
+          ${{ steps.base.outputs.sha && format('--base {0}', steps.base.outputs.sha) || '' }}
+          --github-output "$GITHUB_OUTPUT"
+
+      - name: Validate repository metadata
+        run: python3 scripts/validate_repo_metadata.py
+
+  build:
+    needs: prepare
+    if: needs.prepare.outputs.has_builds == 'true'
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.prepare.outputs.matrix) }}
+    steps:
+      - name: Check out sources
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Set up Java
+        uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5.0.2
+
+      - name: Build ${{ matrix.path }}
+        run: ./gradlew '${{ matrix.task }}'
+
+      - name: Upload unsigned APK
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: unsigned-${{ matrix.slug }}
+          path: ${{ matrix.path }}/build/outputs/apk/release/${{ matrix.slug }}-release-unsigned.apk
+          if-no-files-found: error
+          retention-days: 1
+
+  publish:
+    needs:
+      - prepare
+      - build
+    if: >-
+      always() &&
+      needs.prepare.result == 'success' &&
+      needs.prepare.outputs.has_changes == 'true' &&
+      (needs.build.result == 'success' || needs.build.result == 'skipped')
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    env:
+      EXT_KEYSTORE_PATH: ${{ github.workspace }}/.ci/signing/katari-extensions.p12
+      EXT_KEYSTORE_PASSWORD: ${{ secrets.EXT_KEYSTORE_PASSWORD }}
+      EXT_KEY_ALIAS: ${{ vars.EXT_KEY_ALIAS }}
+    steps:
+      - name: Check out sources
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+
+      - name: Set up Java
+        uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Download unsigned APKs
+        if: needs.prepare.outputs.has_builds == 'true'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          path: .ci/artifacts
+
+      - name: Restore signing key
+        shell: bash
+        run: |
+          mkdir -p .ci/signing
+          printf '%s' '${{ secrets.EXT_KEYSTORE_BASE64 }}' | base64 --decode > "$EXT_KEYSTORE_PATH"
+
+      - name: Prepare generated repository branch
+        shell: bash
+        run: |
+          if git fetch origin repo:refs/remotes/origin/repo; then
+            git worktree add .ci/repo origin/repo
+          else
+            git worktree add --detach .ci/repo
+            git -C .ci/repo switch --orphan repo
+            git -C .ci/repo rm -rf --ignore-unmatch .
+          fi
+
+      - name: Merge changed extensions
+        env:
+          MODULES_JSON: ${{ needs.prepare.outputs.modules }}
+          DELETED_JSON: ${{ needs.prepare.outputs.deleted }}
+        shell: bash
+        run: |
+          args=(--artifacts .ci/artifacts --output .ci/repo)
+          while IFS= read -r module; do
+            args+=(--module "$module")
+          done < <(jq -r '.[]' <<< "$MODULES_JSON")
+          while IFS= read -r slug; do
+            args+=(--delete "$slug")
+          done < <(jq -r '.[]' <<< "$DELETED_JSON")
+          python3 scripts/build_repo.py "${args[@]}"
+          printf '%s\n' "$GITHUB_SHA" > .ci/repo/.source-sha
+
+      - name: Publish generated repository
+        shell: bash
+        run: |
+          git -C .ci/repo config user.name katariapp-bot
+          git -C .ci/repo config user.email 'katariapp-bot@users.noreply.github.com'
+          git -C .ci/repo add --all
+          if git -C .ci/repo diff --cached --quiet; then
+            exit 0
+          fi
+          git -C .ci/repo commit -m 'Update extension repository'
+          git -C .ci/repo push origin HEAD:repo

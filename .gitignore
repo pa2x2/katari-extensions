@@ -1,0 +1,11 @@
+.gradle/
+.ci/
+build/
+local.properties
+**/build/
+*.iml
+*.apk
+*.aab
+.idea/
+.playwright-mcp/
+scripts/__pycache__/

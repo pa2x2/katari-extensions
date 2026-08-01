@@ -1,0 +1,11 @@
+{
+  "sources": [
+    {
+      "id": 500000008,
+      "lang": "en",
+      "name": "NovelFull",
+      "baseUrl": "https://novelfull.net",
+      "supportedEntryTypes": ["BOOK"]
+    }
+  ]
+}

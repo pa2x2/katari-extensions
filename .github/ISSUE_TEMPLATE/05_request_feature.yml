@@ -1,0 +1,46 @@
+name: Extension feature request
+description: Suggest an improvement to an existing Katari extension
+labels: [enhancement]
+body:
+  - type: input
+    id: extension
+    attributes:
+      label: Extension information
+      placeholder: Rezka 2.0.2
+    validations:
+      required: true
+
+  - type: textarea
+    id: feature
+    attributes:
+      label: Proposed feature
+      description: Explain the desired behavior and how the website supports it.
+    validations:
+      required: true
+
+  - type: textarea
+    id: use-case
+    attributes:
+      label: Use case
+      description: Explain what problem this solves for extension users.
+    validations:
+      required: true
+
+  - type: textarea
+    id: other-details
+    attributes:
+      label: Other details
+      description: Add public examples, screenshots, or relevant website documentation.
+
+  - type: checkboxes
+    id: acknowledgements
+    attributes:
+      label: Acknowledgements
+      options:
+        - label: I searched existing open and closed issues for this request.
+          required: true
+        - label: This request concerns an extension rather than the Katari application itself.
+          required: true
+        - label: I confirmed the website exposes the requested capability.
+          required: true
+

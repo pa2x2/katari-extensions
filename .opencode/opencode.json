@@ -1,0 +1,22 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "site_browser": {
+      "type": "local",
+      "command": [
+        "npx",
+        "-y",
+        "@playwright/mcp@latest",
+        "--executable-path",
+        "/usr/bin/brave",
+        "--sandbox",
+        "--timeout-navigation",
+        "90000",
+        "--caps",
+        "devtools"
+      ],
+      "enabled": true,
+      "timeout": 30000
+    }
+  }
+}
