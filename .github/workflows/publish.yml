@@ -49,7 +49,15 @@ jobs:
           --github-output "$GITHUB_OUTPUT"
 
       - name: Validate repository metadata
-        run: python3 scripts/validate_repo_metadata.py
+        env:
+          BASE_SHA: ${{ steps.base.outputs.sha }}
+        shell: bash
+        run: |
+          args=()
+          if [[ -n "$BASE_SHA" ]]; then
+            args+=(--base "$BASE_SHA")
+          fi
+          python3 scripts/validate_repo_metadata.py "${args[@]}"
 
   build:
     needs: prepare

@@ -1,4 +1,5 @@
 import com.android.build.api.dsl.ApplicationExtension
+import groovy.json.JsonSlurper
 import org.gradle.api.Project
 import org.gradle.api.artifacts.VersionCatalogsExtension
 import org.gradle.kotlin.dsl.configure
@@ -23,6 +24,22 @@ val resolvedKatariSourceApiVersion = if (useMavenLocal) {
 
 val configureSharedExtensionModule = { project: Project ->
     val libs = project.extensions.getByType<VersionCatalogsExtension>().named("libs")
+    val metadata = JsonSlurper().parse(project.file("repo-metadata.json")) as Map<*, *>
+    val sourceIds = (metadata["sources"] as? List<*>)
+        ?.map { source ->
+            source as? Map<*, *> ?: error("Invalid source metadata in ${project.path}")
+            val key = source["key"] as? String ?: error("Missing source key in ${project.path}")
+            require(Regex("[a-z][a-z0-9_]*").matches(key)) { "Invalid source key $key in ${project.path}" }
+            val rawId = source["id"] as? Number ?: error("Invalid source ID for $key in ${project.path}")
+            val id = rawId.toString().toLongOrNull()?.takeIf { it > 0 }
+                ?: error("Invalid source ID for $key in ${project.path}")
+            "SOURCE_ID_${key.uppercase()}" to id
+        }
+        ?.takeIf { it.isNotEmpty() }
+        ?: error("Missing sources in ${project.path}/repo-metadata.json")
+    check(sourceIds.map { it.first }.distinct().size == sourceIds.size) {
+        "Source keys must produce unique BuildConfig fields in ${project.path}"
+    }
 
     project.extensions.configure<ApplicationExtension> {
         namespace = "eu.kanade.tachiyomi.extension"
@@ -36,6 +53,13 @@ val configureSharedExtensionModule = { project: Project ->
         defaultConfig {
             minSdk = 26
             targetSdk = 36
+            sourceIds.forEach { (field, id) ->
+                buildConfigField("long", field, "${id}L")
+            }
+        }
+
+        buildFeatures {
+            buildConfig = true
         }
 
         sourceSets {

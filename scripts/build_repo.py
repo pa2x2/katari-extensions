@@ -5,6 +5,7 @@ import base64
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -16,6 +17,8 @@ CONFIG_PATH = ROOT / "repo-config.json"
 DEFAULT_BUILD_DIR = ROOT / "build" / "repo"
 MODULE_METADATA_GLOB = "src/*/*/repo-metadata.json"
 SUPPORTED_ENTRY_TYPES = {"MANGA", "ANIME", "BOOK"}
+SOURCE_KEY_PATTERN = re.compile(r"[a-z][a-z0-9_]*\Z")
+MAX_SOURCE_ID = (1 << 63) - 1
 
 
 def run(*args: str) -> str:
@@ -43,9 +46,19 @@ def load_module_metadata(metadata_path: Path) -> dict:
         raise SystemExit(f"Missing or empty sources in {metadata_path}")
 
     for index, source in enumerate(sources, start=1):
-        missing = [key for key in ("id", "lang", "name", "baseUrl") if key not in source]
+        missing = [key for key in ("key", "id", "lang", "name", "baseUrl") if key not in source]
         if missing:
             raise SystemExit(f"Missing {missing} in source #{index} of {metadata_path}")
+
+        source_key = source["key"]
+        if not isinstance(source_key, str) or not SOURCE_KEY_PATTERN.fullmatch(source_key):
+            raise SystemExit(f"Invalid source key {source_key!r} in source #{index} of {metadata_path}")
+
+        source_id = source["id"]
+        if isinstance(source_id, bool) or not isinstance(source_id, int) or not 0 < source_id <= MAX_SOURCE_ID:
+            raise SystemExit(
+                f"Source ID must be a positive signed 64-bit integer in source #{index} of {metadata_path}",
+            )
 
         entry_types = source.get("supportedEntryTypes")
         if entry_types is not None:
@@ -66,6 +79,10 @@ def load_module_metadata(metadata_path: Path) -> dict:
                 raise SystemExit(
                     f"Duplicate supportedEntryTypes in source #{index} of {metadata_path}",
                 )
+
+    source_keys = [source["key"] for source in sources]
+    if len(source_keys) != len(set(source_keys)):
+        raise SystemExit(f"Source keys must be unique in {metadata_path}")
 
     module_path = metadata_path.parent.relative_to(ROOT).as_posix()
     return {
@@ -93,9 +110,32 @@ def validate_unique_slugs(modules: list[dict]) -> None:
         raise SystemExit(f"Module slugs must be globally unique ({details})")
 
 
+def validate_unique_source_ids(modules: list[dict]) -> None:
+    owners_by_id: dict[int, list[str]] = {}
+    for module in modules:
+        for source in module["sources"]:
+            owners_by_id.setdefault(source["id"], []).append(f"{module['path']}:{source['key']}")
+    duplicates = {
+        source_id: owners
+        for source_id, owners in owners_by_id.items()
+        if len(owners) > 1
+    }
+    if duplicates:
+        details = "; ".join(
+            f"{source_id}: {', '.join(owners)}"
+            for source_id, owners in sorted(duplicates.items())
+        )
+        raise SystemExit(f"Source IDs must be globally unique ({details})")
+
+
+def source_id_field(source_key: str) -> str:
+    return f"SOURCE_ID_{source_key.upper()}"
+
+
 def discover_modules(selected: set[str] | None = None) -> list[dict]:
     modules = [load_module_metadata(path) for path in sorted(ROOT.glob(MODULE_METADATA_GLOB))]
     validate_unique_slugs(modules)
+    validate_unique_source_ids(modules)
 
     if selected is not None:
         modules = [module for module in modules if module["path"] in selected]

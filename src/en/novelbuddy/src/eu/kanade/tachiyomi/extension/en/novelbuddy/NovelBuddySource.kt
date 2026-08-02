@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.en.novelbuddy
 
+import eu.kanade.tachiyomi.extension.BuildConfig
 import eu.kanade.tachiyomi.source.entry.ChapterWebViewSource
 import eu.kanade.tachiyomi.source.entry.EntryFilterList
 import eu.kanade.tachiyomi.source.entry.EntryHttpSource
@@ -14,7 +15,7 @@ import okhttp3.Headers
 import okhttp3.OkHttpClient
 
 internal class NovelBuddySource : EntryHttpSource(), ChapterWebViewSource, SourceMetadata {
-    override val id: Long = SOURCE_ID
+    override val id: Long = BuildConfig.SOURCE_ID_NOVELBUDDY
     override val name: String = "NovelBuddy"
     override val lang: String = "en"
     override val supportsLatest: Boolean = true
@@ -86,9 +87,5 @@ internal class NovelBuddySource : EntryHttpSource(), ChapterWebViewSource, Sourc
             items = result.items.map(NovelBuddyTitle::toSEntry),
             hasNextPage = result.pagination.hasNext,
         )
-    }
-
-    private companion object {
-        const val SOURCE_ID = 500000007L
     }
 }

@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.all.rezka
 
+import eu.kanade.tachiyomi.extension.BuildConfig
 import eu.kanade.tachiyomi.source.entry.EntrySourceFactory
 import eu.kanade.tachiyomi.source.entry.UnifiedSource
 
@@ -9,22 +10,22 @@ class RezkaFactory : EntrySourceFactory {
             RezkaSource(
                 name = "Rezka Films",
                 pathSegment = "films",
-                sourceId = 500000001L,
+                sourceId = BuildConfig.SOURCE_ID_REZKA_FILMS,
             ),
             RezkaSource(
                 name = "Rezka Series",
                 pathSegment = "series",
-                sourceId = 500000002L,
+                sourceId = BuildConfig.SOURCE_ID_REZKA_SERIES,
             ),
             RezkaSource(
                 name = "Rezka Cartoons",
                 pathSegment = "cartoons",
-                sourceId = 500000003L,
+                sourceId = BuildConfig.SOURCE_ID_REZKA_CARTOONS,
             ),
             RezkaSource(
                 name = "Rezka Anime",
                 pathSegment = "anime",
-                sourceId = 500000004L,
+                sourceId = BuildConfig.SOURCE_ID_REZKA_ANIME,
             ),
         )
     }

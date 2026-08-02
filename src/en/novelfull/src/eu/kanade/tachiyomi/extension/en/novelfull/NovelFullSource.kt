@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.en.novelfull
 
+import eu.kanade.tachiyomi.extension.BuildConfig
 import eu.kanade.tachiyomi.source.entry.ChapterWebViewSource
 import eu.kanade.tachiyomi.source.entry.EntryFilterList
 import eu.kanade.tachiyomi.source.entry.EntryHttpSource
@@ -14,7 +15,7 @@ import okhttp3.Headers
 import okhttp3.OkHttpClient
 
 internal class NovelFullSource : EntryHttpSource(), ChapterWebViewSource, SourceMetadata {
-    override val id: Long = SOURCE_ID
+    override val id: Long = BuildConfig.SOURCE_ID_NOVELFULL
     override val name: String = "NovelFull"
     override val lang: String = "en"
     override val supportsLatest: Boolean = true
@@ -80,7 +81,6 @@ internal class NovelFullSource : EntryHttpSource(), ChapterWebViewSource, Source
     }
 
     private companion object {
-        const val SOURCE_ID = 500000008L
         const val BASE_URL = "https://novelfull.net"
         const val BROWSER_USER_AGENT = "Mozilla/5.0 (Linux; Android 15; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Mobile Safari/537.36"
     }

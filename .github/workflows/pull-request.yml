@@ -34,7 +34,15 @@ jobs:
           python3 scripts/changed_modules.py "${args[@]}"
 
       - name: Validate repository metadata
-        run: python3 scripts/validate_repo_metadata.py
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        shell: bash
+        run: |
+          args=()
+          if [[ -n "$BASE_SHA" ]]; then
+            args+=(--base "$BASE_SHA")
+          fi
+          python3 scripts/validate_repo_metadata.py "${args[@]}"
 
       - name: Check publication scripts
         run: python3 -m compileall -q scripts

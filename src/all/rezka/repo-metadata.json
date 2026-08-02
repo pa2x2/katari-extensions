@@ -1,6 +1,7 @@
 {
   "sources": [
     {
+      "key": "rezka_films",
       "id": 500000001,
       "lang": "ru",
       "name": "Rezka Films",
@@ -8,6 +9,7 @@
       "supportedEntryTypes": ["ANIME"]
     },
     {
+      "key": "rezka_series",
       "id": 500000002,
       "lang": "ru",
       "name": "Rezka Series",
@@ -15,6 +17,7 @@
       "supportedEntryTypes": ["ANIME"]
     },
     {
+      "key": "rezka_cartoons",
       "id": 500000003,
       "lang": "ru",
       "name": "Rezka Cartoons",
@@ -22,6 +25,7 @@
       "supportedEntryTypes": ["ANIME"]
     },
     {
+      "key": "rezka_anime",
       "id": 500000004,
       "lang": "ru",
       "name": "Rezka Anime",
