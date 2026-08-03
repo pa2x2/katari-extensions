@@ -165,6 +165,17 @@ jobs:
           git -C .ci/repo config user.name pa2x2-bot
           git -C .ci/repo config user.email 'pa2x2-bot@users.noreply.github.com'
           git -C .ci/repo add --all
+          if find .ci/repo/apk -maxdepth 1 -type f -name '*.apk' -print -quit | grep -q .; then
+            git -C .ci/repo add --force -- apk
+          fi
+          while IFS= read -r apk_url; do
+            apk_path="apk/${apk_url##*/}"
+            if [[ ! -f ".ci/repo/$apk_path" ]] ||
+              ! git -C .ci/repo ls-files --error-unmatch -- "$apk_path" >/dev/null; then
+              echo "::error file=.ci/repo/index.json::Indexed APK is missing or untracked: $apk_path"
+              exit 1
+            fi
+          done < <(jq -r '.extensionList.extensions[].resources.apkUrl' .ci/repo/index.json)
           if git -C .ci/repo diff --cached --quiet; then
             exit 0
           fi

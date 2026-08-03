@@ -10,6 +10,7 @@ ROOT = Path(__file__).resolve().parent.parent
 MODULE_BUILD_GLOB = "src/*/*/build.gradle.kts"
 GLOBAL_PREFIXES = ("gradle/", "scripts/")
 GLOBAL_FILES = {
+    ".github/workflows/publish.yml",
     "build.gradle.kts",
     "gradle.properties",
     "settings.gradle.kts",
