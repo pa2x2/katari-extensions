@@ -10,8 +10,8 @@ configureSharedExtensionModule(project)
 
 android {
     defaultConfig {
-        versionCode = 6
-        versionName = "2.4.0"
+        versionCode = 7
+        versionName = "2.5.0"
         applicationId = "eu.kanade.tachiyomi.extension.en.novelfull"
 
         manifestPlaceholders += mapOf(
