@@ -35,8 +35,11 @@ internal class NovelBuddyApi(
         "$API_URL/titles/by-slug/$slug?include=details",
     ).data.title
 
-    suspend fun chapters(titleId: String): List<NovelBuddyChapter> {
-        val result = get<NovelBuddyChaptersResponse>("$API_URL/titles/$titleId/chapters").data.chapters
+    suspend fun chapters(titleId: String, cacheVersion: Long?): List<NovelBuddyChapter> {
+        val url = "$API_URL/titles/$titleId/chapters".toHttpUrl().newBuilder()
+            .apply { cacheVersion?.let { addQueryParameter("cv", it.toString()) } }
+            .build()
+        val result = get<NovelBuddyChaptersResponse>(url.toString()).data.chapters
         require(result.size <= MAX_CHAPTERS) { "NovelBuddy returned too many chapters" }
         require(result.distinctBy(NovelBuddyChapter::id).size == result.size) {
             "NovelBuddy returned duplicate chapter identities"

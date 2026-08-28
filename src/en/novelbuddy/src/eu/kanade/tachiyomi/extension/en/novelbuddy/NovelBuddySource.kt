@@ -63,7 +63,8 @@ internal class NovelBuddySource : EntryHttpSource(), ChapterWebViewSource, Sourc
     override suspend fun getChapterList(entry: SEntry): List<SEntryChapter> {
         val key = entry.url.toNovelBuddyTitleKey()
             ?: error("Invalid NovelBuddy BOOK identity: ${entry.url}")
-        return api.chapters(key.id).map { it.toSEntryChapter(key.id, key.slug) }
+        val cacheVersion = api.title(key.slug).cv
+        return api.chapters(key.id, cacheVersion).map { it.toSEntryChapter(key.id, key.slug) }
     }
 
     override suspend fun getMedia(chapter: SEntryChapter, selection: PlaybackSelection): EntryMedia {

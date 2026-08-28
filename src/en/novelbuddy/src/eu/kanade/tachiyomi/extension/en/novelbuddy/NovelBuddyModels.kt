@@ -40,6 +40,7 @@ internal data class NovelBuddyTitle(
     val id: String,
     val name: String,
     val slug: String,
+    val cv: Long? = null,
     val cover: String? = null,
     val summary: String? = null,
     val status: String? = null,

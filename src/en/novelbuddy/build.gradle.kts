@@ -11,8 +11,8 @@ configureSharedExtensionModule(project)
 
 android {
     defaultConfig {
-        versionCode = 8
-        versionName = "2.5.0"
+        versionCode = 9
+        versionName = "2.5.1"
         applicationId = "eu.kanade.tachiyomi.extension.en.novelbuddy"
 
         manifestPlaceholders += mapOf(
