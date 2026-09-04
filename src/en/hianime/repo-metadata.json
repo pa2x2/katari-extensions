@@ -1,0 +1,12 @@
+{
+  "sources": [
+    {
+      "key": "hianime",
+      "id": 500000010,
+      "lang": "en",
+      "name": "HiAnime",
+      "baseUrl": "https://hianime.at",
+      "supportedEntryTypes": ["ANIME"]
+    }
+  ]
+}
