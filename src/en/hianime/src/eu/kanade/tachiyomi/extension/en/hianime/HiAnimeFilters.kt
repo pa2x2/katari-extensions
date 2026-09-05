@@ -9,13 +9,11 @@ internal data class HiAnimeSearchSelection(val parameters: List<Pair<String, Str
 
 internal class HiAnimeTypeFilter : EntryFilter.Select<String>("Type", TYPE_OPTIONS.labels())
 internal class HiAnimeStatusFilter : EntryFilter.Select<String>("Status", STATUS_OPTIONS.labels())
-internal class HiAnimeRatingFilter : EntryFilter.Select<String>("Rated", RATING_OPTIONS.labels())
+internal class HiAnimeRatingFilter : EntryFilter.Select<String>("Age rating", RATING_OPTIONS.labels())
 internal class HiAnimeScoreFilter : EntryFilter.Select<String>("Score", SCORE_OPTIONS.labels())
 internal class HiAnimeSeasonFilter : EntryFilter.Select<String>("Season", SEASON_OPTIONS.labels())
-internal class HiAnimeLanguageFilter : EntryFilter.Select<String>("Language", LANGUAGE_OPTIONS.labels())
+internal class HiAnimeLanguageFilter : EntryFilter.Select<String>("Sub/Dub", LANGUAGE_OPTIONS.labels())
 internal class HiAnimeSortFilter : EntryFilter.Select<String>("Sort by", SORT_OPTIONS.labels())
-internal class HiAnimeStartDateFilter : EntryFilter.Text("Start date (YYYY-MM-DD)")
-internal class HiAnimeEndDateFilter : EntryFilter.Text("End date (YYYY-MM-DD)")
 
 internal class HiAnimeGenreCheckBox(
     name: String,
@@ -27,53 +25,63 @@ internal class HiAnimeGenreFilter : EntryFilter.Group<HiAnimeGenreCheckBox>(
     state = GENRES.map { (label, value) -> HiAnimeGenreCheckBox(label, value) },
 )
 
-internal fun hiAnimeFilterList(): EntryFilterList = EntryFilterList(
-    HiAnimeTypeFilter(),
-    HiAnimeStatusFilter(),
-    HiAnimeRatingFilter(),
-    HiAnimeScoreFilter(),
-    HiAnimeSeasonFilter(),
-    HiAnimeLanguageFilter(),
-    HiAnimeSortFilter(),
-    EntryFilter.Separator(),
-    HiAnimeStartDateFilter(),
-    HiAnimeEndDateFilter(),
-    HiAnimeGenreFilter(),
+internal class HiAnimeReleasePeriodFilter : EntryFilter.Group<EntryFilter<*>>(
+    name = "Release period",
+    state = listOf(
+        HiAnimeSeasonFilter(),
+        EntryFilter.Header("Dates: YYYY, YYYY-MM or YYYY-MM-DD. Leave blank for any date."),
+        HiAnimeStartDateFilter(),
+        HiAnimeEndDateFilter(),
+    ),
 )
 
-internal fun EntryFilterList.toHiAnimeSearchSelection(query: String): HiAnimeSearchSelection =
-    HiAnimeSearchSelection(
+internal class HiAnimeAdvancedFilter : EntryFilter.Group<EntryFilter<*>>(
+    name = "Advanced options",
+    state = listOf(HiAnimeRatingFilter(), HiAnimeScoreFilter()),
+)
+
+internal fun hiAnimeFilterList(): EntryFilterList = EntryFilterList(
+    HiAnimeSortFilter(),
+    HiAnimeTypeFilter(),
+    HiAnimeLanguageFilter(),
+    HiAnimeStatusFilter(),
+    HiAnimeGenreFilter(),
+    HiAnimeReleasePeriodFilter(),
+    HiAnimeAdvancedFilter(),
+)
+
+internal fun EntryFilterList.toHiAnimeSearchSelection(query: String): HiAnimeSearchSelection {
+    val filters = flatMap { filter ->
+        when (filter) {
+            is HiAnimeReleasePeriodFilter -> filter.state
+            is HiAnimeAdvancedFilter -> filter.state
+            else -> listOf(filter)
+        }
+    }
+    return HiAnimeSearchSelection(
         parameters = buildList {
             query.trim().ifBlank { null }?.let { add("keyword" to it) }
-            selectedValue<HiAnimeTypeFilter>(TYPE_OPTIONS)?.let { add("type" to it) }
-            selectedValue<HiAnimeStatusFilter>(STATUS_OPTIONS)?.let { add("status" to it) }
-            selectedValue<HiAnimeRatingFilter>(RATING_OPTIONS)?.let { add("rating" to it) }
-            selectedValue<HiAnimeScoreFilter>(SCORE_OPTIONS)?.let { add("score" to it) }
-            selectedValue<HiAnimeSeasonFilter>(SEASON_OPTIONS)?.let { add("season" to it) }
-            selectedValue<HiAnimeLanguageFilter>(LANGUAGE_OPTIONS)?.let { add("language" to it) }
-            selectedValue<HiAnimeSortFilter>(SORT_OPTIONS)?.let { add("sort" to it) }
-            this@toHiAnimeSearchSelection.filterIsInstance<HiAnimeStartDateFilter>()
-                .firstOrNull()?.state?.toDateParameters("s")?.let(::addAll)
-            this@toHiAnimeSearchSelection.filterIsInstance<HiAnimeEndDateFilter>()
-                .firstOrNull()?.state?.toDateParameters("e")?.let(::addAll)
-            this@toHiAnimeSearchSelection.filterIsInstance<HiAnimeGenreFilter>().firstOrNull()?.state
+            filters.selectedValue<HiAnimeTypeFilter>(TYPE_OPTIONS)?.let { add("type" to it) }
+            filters.selectedValue<HiAnimeStatusFilter>(STATUS_OPTIONS)?.let { add("status" to it) }
+            filters.selectedValue<HiAnimeRatingFilter>(RATING_OPTIONS)?.let { add("rating" to it) }
+            filters.selectedValue<HiAnimeScoreFilter>(SCORE_OPTIONS)?.let { add("score" to it) }
+            filters.selectedValue<HiAnimeSeasonFilter>(SEASON_OPTIONS)?.let { add("season" to it) }
+            filters.selectedValue<HiAnimeLanguageFilter>(LANGUAGE_OPTIONS)?.let { add("language" to it) }
+            filters.selectedValue<HiAnimeSortFilter>(SORT_OPTIONS)?.let { add("sort" to it) }
+            filters.filterIsInstance<HiAnimeStartDateFilter>()
+                .firstOrNull()?.toDateParameters("s")?.let(::addAll)
+            filters.filterIsInstance<HiAnimeEndDateFilter>()
+                .firstOrNull()?.toDateParameters("e")?.let(::addAll)
+            filters.filterIsInstance<HiAnimeGenreFilter>().firstOrNull()?.state
                 ?.filter(HiAnimeGenreCheckBox::state)
                 ?.forEach { add("genre[]" to it.value) }
         },
     )
+}
 
-private inline fun <reified T : EntryFilter.Select<String>> EntryFilterList.selectedValue(
+private inline fun <reified T : EntryFilter.Select<String>> List<EntryFilter<*>>.selectedValue(
     options: List<HiAnimeFilterOption>,
 ): String? = filterIsInstance<T>().firstOrNull()?.let { options.getOrElse(it.state) { options.first() }.value }
-
-private fun String.toDateParameters(prefix: String): List<Pair<String, String>> {
-    val match = DATE_REGEX.matchEntire(trim()) ?: return emptyList()
-    return listOf(
-        "${prefix}y" to match.groupValues[1],
-        "${prefix}m" to match.groupValues[2].toInt().toString(),
-        "${prefix}d" to match.groupValues[3].toInt().toString(),
-    )
-}
 
 private fun List<HiAnimeFilterOption>.labels(): Array<String> = map(HiAnimeFilterOption::label).toTypedArray()
 
@@ -102,11 +110,13 @@ private val SEASON_OPTIONS = listOf(
     HiAnimeFilterOption("Winter", "winter"),
 )
 private val LANGUAGE_OPTIONS = listOf(
-    HiAnimeFilterOption("All", null), HiAnimeFilterOption("SUB", "sub"), HiAnimeFilterOption("DUB", "dub"),
+    HiAnimeFilterOption("All", null),
+    HiAnimeFilterOption("Subtitled (SUB)", "sub"),
+    HiAnimeFilterOption("Dubbed (DUB)", "dub"),
 )
 private val SORT_OPTIONS = listOf(
-    HiAnimeFilterOption("Default", null), HiAnimeFilterOption("Recently Updated", "updated_date"),
-    HiAnimeFilterOption("Recently Added", "added_date"), HiAnimeFilterOption("Released Date", "release_date"),
+    HiAnimeFilterOption("Website default", null), HiAnimeFilterOption("Recently Updated", "updated_date"),
+    HiAnimeFilterOption("Recently Added", "added_date"), HiAnimeFilterOption("Release date", "release_date"),
     HiAnimeFilterOption("Trending", "trending"), HiAnimeFilterOption("Name A-Z", "title_az"),
     HiAnimeFilterOption("Score", "avg_score"), HiAnimeFilterOption("MAL Score", "mal_score"),
     HiAnimeFilterOption("Most Watched", "most_viewed"), HiAnimeFilterOption("Most Followed", "most_followed"),
@@ -143,5 +153,3 @@ private val GENRES = listOf(
     "Vampire" to "vampire", "Video Game" to "video-game", "Villainess" to "villainess",
     "Visual Arts" to "visual-arts", "Workplace" to "workplace",
 )
-
-private val DATE_REGEX = Regex("(\\d{4})-(\\d{1,2})-(\\d{1,2})")
