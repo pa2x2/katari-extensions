@@ -1,0 +1,12 @@
+{
+  "sources": [
+    {
+      "key": "gutenberg",
+      "id": 500000011,
+      "lang": "all",
+      "name": "Project Gutenberg",
+      "baseUrl": "https://www.gutenberg.org",
+      "supportedEntryTypes": ["BOOK"]
+    }
+  ]
+}
