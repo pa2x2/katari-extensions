@@ -47,14 +47,15 @@ internal object NovelFullParser {
         }
 
     fun parseChapter(document: Document): NovelFullChapterContent {
-        val content = document.selectFirst("#chapter-content")?.clone()
+        val content = document.selectFirst("#chapter-content")?.novelFullProseRoot()
             ?: error("NovelFull returned no chapter content")
         content.select("iframe[data-aa], #frame, .ads.ads-holder.ads-middle, script, noscript, form").remove()
         content.select("div, p").filter(Element::isBlank).forEach(Element::remove)
         val assets = content.normalizeNovelFullProse()
+        require(content.html().isNotBlank()) { "NovelFull returned an empty chapter" }
         return NovelFullChapterContent(
             title = document.selectFirst("#chapter .chapter-title")?.text()?.trim()?.ifBlank { null },
-            html = content.html().trim(),
+            html = content.outerHtml().trim(),
             assets = assets,
         )
     }

@@ -11,6 +11,29 @@ internal data class NovelFullProseAsset(
     val alternativeText: String?,
 )
 
+/** Retains chapter semantics that would be lost when serializing only the container's children. */
+internal fun Element.novelFullProseRoot(): Element {
+    val ancestors = generateSequence(this) { it.parent() }.toList()
+    val language = ancestors.firstNotNullOfOrNull { element ->
+        element.attr("lang").ifBlank { element.attr("xml:lang") }.trim().ifBlank { null }
+    }
+    val direction = ancestors.firstNotNullOfOrNull { it.attr("dir").trim().ifBlank { null } }
+    val flow = attr("style").split(';').mapNotNull { declaration ->
+        val property = declaration.substringBefore(':').trim().lowercase()
+        if (':' in declaration && property in PROSE_FLOW_PROPERTIES) declaration.trim() else null
+    }.joinToString("; ")
+    return clone().apply {
+        // Page classes, event handlers and font/size preferences do not belong on the content wrapper.
+        // The old fragment omitted the container ID; adding it would change saved BOOK block identities.
+        clearAttributes()
+        language?.let { attr("lang", it) }
+        direction?.let { attr("dir", it) }
+        if (flow.isNotEmpty()) attr("style", flow)
+    }
+}
+
+private val PROSE_FLOW_PROPERTIES = setOf("margin-top", "margin-bottom", "line-height", "text-indent", "direction")
+
 internal fun Element.normalizeNovelFullProse(): List<NovelFullProseAsset> {
     normalizeProseLinks()
     return extractProseAssets()

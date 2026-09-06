@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.en.novelbuddy
 
 import eu.kanade.tachiyomi.source.entry.EntryFilter
 import eu.kanade.tachiyomi.source.entry.EntryFilterList
+import eu.kanade.tachiyomi.source.entry.filter.*
 
 internal data class NovelBuddySearchSelection(
     val query: String? = null,
@@ -14,25 +15,47 @@ internal data class NovelBuddySearchSelection(
     val sort: String? = null,
 )
 
-internal class NovelBuddyStatusFilter : EntryFilter.Select<String>(
-    name = "Status",
-    values = arrayOf("All", "Ongoing", "Completed"),
+internal abstract class NovelBuddyChoice(
+    name: String,
+    id: String,
+    labels: Array<String>,
+    optionIds: List<String>,
+    legacyOptions: List<String>,
+    role: EntryFilterRole = EntryFilterRole.CONSTRAINT,
+) : EntryFilter.Select<String>(name, labels), EntryFilterMetadataProvider {
+    override val filterMetadata = EntryFilterMetadata(
+        id = id, optionIds = optionIds, legacyNames = setOf(name), legacyOptionIds = legacyOptions,
+        neutralOptionId = "any", role = role,
+    )
+}
+
+internal class NovelBuddyStatusFilter : NovelBuddyChoice(
+    "Status", "status", arrayOf("All", "Ongoing", "Completed"),
+    STATUS_VALUES.map { it ?: "any" }, listOf("any", "ongoing", "completed"),
 )
 
-internal class NovelBuddyContentRatingFilter : EntryFilter.Select<String>(
-    name = "Content rating",
-    values = arrayOf("All", "Safe", "Suggestive", "Erotica", "Pornographic"),
+internal class NovelBuddyContentRatingFilter : NovelBuddyChoice(
+    "Content rating", "content_rating", arrayOf("All", "Safe", "Suggestive", "Erotica", "Pornographic"),
+    CONTENT_RATING_VALUES.map { it ?: "any" }, listOf("any", "safe", "suggestive", "erotica", "pornographic"),
 )
 
-internal class NovelBuddySortFilter : EntryFilter.Select<String>(
-    name = "Sort by",
-    values = arrayOf("Best match", "Latest", "Popular", "Rating", "Newest", "Chapter count"),
+internal class NovelBuddySortFilter : NovelBuddyChoice(
+    "Sort by", "sort", arrayOf("Best match", "Latest", "Popular", "Rating", "Newest", "Chapter count"),
+    SORT_VALUES.map { it ?: "any" }, listOf("any", "latest", "popular", "rating", "newest", "chapters"),
+    EntryFilterRole.ORDERING,
 )
 
-internal class NovelBuddyGenreFilter : EntryFilter.Text("Genre slug")
-internal class NovelBuddyAuthorFilter : EntryFilter.Text("Author")
-internal class NovelBuddyMinimumChaptersFilter : EntryFilter.Text("Minimum chapters")
-internal class NovelBuddyMaximumChaptersFilter : EntryFilter.Text("Maximum chapters")
+internal open class NovelBuddyTextFilter(name: String, id: String, description: String? = null) :
+    EntryFilter.Text(name), EntryFilterMetadataProvider, EntryFilterStateSemantics {
+    override val filterMetadata = EntryFilterMetadata(id = id, legacyNames = setOf(name), description = description)
+    override val canClearSelection = true
+    override fun activeSelectionCount(value: EntryFilter<*>): Int? =
+        (value as? EntryFilter.Text)?.let { if (it.state.isBlank()) 0 else 1 }
+    override fun clearSelection(value: EntryFilter<*>) { (value as? EntryFilter.Text)?.state = "" }
+}
+
+internal class NovelBuddyGenreFilter : NovelBuddyTextFilter("Genre slug", "genre")
+internal class NovelBuddyAuthorFilter : NovelBuddyTextFilter("Author", "author")
 
 internal fun novelBuddyFilterList(): EntryFilterList = EntryFilterList(
     NovelBuddyStatusFilter(),
@@ -41,28 +64,28 @@ internal fun novelBuddyFilterList(): EntryFilterList = EntryFilterList(
     EntryFilter.Separator(),
     NovelBuddyGenreFilter(),
     NovelBuddyAuthorFilter(),
-    NovelBuddyMinimumChaptersFilter(),
-    NovelBuddyMaximumChaptersFilter(),
+    NovelBuddyChapterCountFilter(),
 )
 
-internal fun EntryFilterList.toNovelBuddySearchSelection(query: String): NovelBuddySearchSelection =
-    NovelBuddySearchSelection(
+internal fun EntryFilterList.toNovelBuddySearchSelection(query: String): NovelBuddySearchSelection {
+    requireValidFilters()
+    val filters = flatMap { if (it is EntryFilter.Group<*>) it.state.filterIsInstance<EntryFilter<*>>() else listOf(it) }
+    return NovelBuddySearchSelection(
         query = query.trim().ifBlank { null },
-        status = selectValue<NovelBuddyStatusFilter>(STATUS_VALUES),
-        contentRating = selectValue<NovelBuddyContentRatingFilter>(CONTENT_RATING_VALUES),
-        genre = textValue<NovelBuddyGenreFilter>(),
-        author = textValue<NovelBuddyAuthorFilter>(),
-        minimumChapters = textValue<NovelBuddyMinimumChaptersFilter>()?.toIntOrNull()?.coerceAtLeast(0),
-        maximumChapters = textValue<NovelBuddyMaximumChaptersFilter>()?.toIntOrNull()?.coerceAtLeast(0),
-        sort = filterIsInstance<NovelBuddySortFilter>().firstOrNull()?.let {
-            SORT_VALUES.getOrElse(it.state) { SORT_VALUES.first() }
-        },
+        status = filters.selectValue<NovelBuddyStatusFilter>(STATUS_VALUES),
+        contentRating = filters.selectValue<NovelBuddyContentRatingFilter>(CONTENT_RATING_VALUES),
+        genre = filters.textValue<NovelBuddyGenreFilter>(),
+        author = filters.textValue<NovelBuddyAuthorFilter>(),
+        minimumChapters = filters.textValue<NovelBuddyMinimumChaptersFilter>()?.toInt(),
+        maximumChapters = filters.textValue<NovelBuddyMaximumChaptersFilter>()?.toInt(),
+        sort = filters.selectValue<NovelBuddySortFilter>(SORT_VALUES),
     )
+}
 
-private inline fun <reified T : EntryFilter.Select<String>> EntryFilterList.selectValue(values: List<String?>): String? =
-    filterIsInstance<T>().firstOrNull()?.let { values.getOrElse(it.state) { values.first() } }
+private inline fun <reified T : EntryFilter.Select<String>> List<EntryFilter<*>>.selectValue(values: List<String?>): String? =
+    filterIsInstance<T>().firstOrNull()?.let { values[it.state] }
 
-private inline fun <reified T : EntryFilter.Text> EntryFilterList.textValue(): String? =
+private inline fun <reified T : EntryFilter.Text> List<EntryFilter<*>>.textValue(): String? =
     filterIsInstance<T>().firstOrNull()?.state?.trim()?.ifBlank { null }
 
 internal const val LATEST_SORT = "latest"

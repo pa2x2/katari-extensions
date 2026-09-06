@@ -2,43 +2,86 @@ package eu.kanade.tachiyomi.extension.en.hianime
 
 import eu.kanade.tachiyomi.source.entry.EntryFilter
 import eu.kanade.tachiyomi.source.entry.EntryFilterList
+import eu.kanade.tachiyomi.source.entry.filter.*
 
 internal data class HiAnimeFilterOption(val label: String, val value: String?)
 
 internal data class HiAnimeSearchSelection(val parameters: List<Pair<String, String>>)
 
-internal class HiAnimeTypeFilter : EntryFilter.Select<String>("Type", TYPE_OPTIONS.labels())
-internal class HiAnimeStatusFilter : EntryFilter.Select<String>("Status", STATUS_OPTIONS.labels())
-internal class HiAnimeRatingFilter : EntryFilter.Select<String>("Age rating", RATING_OPTIONS.labels())
-internal class HiAnimeScoreFilter : EntryFilter.Select<String>("Score", SCORE_OPTIONS.labels())
-internal class HiAnimeSeasonFilter : EntryFilter.Select<String>("Season", SEASON_OPTIONS.labels())
-internal class HiAnimeLanguageFilter : EntryFilter.Select<String>("Sub/Dub", LANGUAGE_OPTIONS.labels())
-internal class HiAnimeSortFilter : EntryFilter.Select<String>("Sort by", SORT_OPTIONS.labels())
+internal abstract class HiAnimeSelectFilter(
+    name: String,
+    id: String,
+    options: List<HiAnimeFilterOption>,
+    legacyOptions: List<String>,
+    role: EntryFilterRole = EntryFilterRole.CONSTRAINT,
+) : EntryFilter.Select<String>(name, options.labels()), EntryFilterMetadataProvider {
+    override val filterMetadata = EntryFilterMetadata(
+        id = id,
+        optionIds = options.map { it.value ?: "any" },
+        legacyNames = setOf(name),
+        legacyOptionIds = legacyOptions,
+        neutralOptionId = "any",
+        role = role,
+    )
+}
+
+// These option tables describe the published 2.5 layout; keep their order when options change.
+internal class HiAnimeTypeFilter : HiAnimeSelectFilter(
+    "Type", "type", TYPE_OPTIONS,
+    legacyOptions = listOf("any", "tv", "movie", "ova", "ona", "special", "music"),
+)
+internal class HiAnimeStatusFilter : HiAnimeSelectFilter(
+    "Status", "status", STATUS_OPTIONS,
+    legacyOptions = listOf("any", "completed", "airing", "not_yet_aired"),
+)
+internal class HiAnimeRatingFilter : HiAnimeSelectFilter(
+    "Age rating", "rating", RATING_OPTIONS,
+    legacyOptions = listOf("any", "g", "pg", "pg_13", "r_17", "r_plus", "rx"),
+)
+internal class HiAnimeScoreFilter : HiAnimeSelectFilter(
+    "Score", "score", SCORE_OPTIONS,
+    legacyOptions = listOf("any", "10", "9", "8", "7", "6", "5", "4", "3", "2", "1"),
+)
+internal class HiAnimeSeasonFilter : HiAnimeSelectFilter(
+    "Season", "season", SEASON_OPTIONS,
+    legacyOptions = listOf("any", "spring", "summer", "fall", "winter"),
+)
+internal class HiAnimeLanguageFilter : HiAnimeSelectFilter(
+    "Sub/Dub", "language", LANGUAGE_OPTIONS,
+    legacyOptions = listOf("any", "sub", "dub"),
+)
+internal class HiAnimeSortFilter : HiAnimeSelectFilter(
+    "Sort by", "sort", SORT_OPTIONS,
+    legacyOptions = listOf("any", "updated_date", "added_date", "release_date", "trending", "title_az", "avg_score", "mal_score", "most_viewed", "most_followed", "episode_count"),
+    role = EntryFilterRole.ORDERING,
+)
 
 internal class HiAnimeGenreCheckBox(
     name: String,
     val value: String,
-) : EntryFilter.CheckBox(name)
+) : EntryFilter.CheckBox(name), EntryFilterMetadataProvider {
+    override val filterMetadata = EntryFilterMetadata(id = "genre.$value", legacyNames = setOf(name))
+}
 
 internal class HiAnimeGenreFilter : EntryFilter.Group<HiAnimeGenreCheckBox>(
     name = "Genres",
     state = GENRES.map { (label, value) -> HiAnimeGenreCheckBox(label, value) },
-)
-
-internal class HiAnimeReleasePeriodFilter : EntryFilter.Group<EntryFilter<*>>(
-    name = "Release period",
-    state = listOf(
-        HiAnimeSeasonFilter(),
-        EntryFilter.Header("Dates: YYYY, YYYY-MM or YYYY-MM-DD. Leave blank for any date."),
-        HiAnimeStartDateFilter(),
-        HiAnimeEndDateFilter(),
-    ),
-)
+), EntryFilterMetadataProvider {
+    override val filterMetadata = EntryFilterMetadata(id = "genres")
+}
 
 internal class HiAnimeAdvancedFilter : EntryFilter.Group<EntryFilter<*>>(
     name = "Advanced options",
     state = listOf(HiAnimeRatingFilter(), HiAnimeScoreFilter()),
-)
+), EntryFilterMetadataProvider, EntryFilterGroupSummary {
+    override val filterMetadata = EntryFilterMetadata(id = "advanced")
+
+    override fun selectionSummary(values: List<EntryFilter<*>>): String? = values
+        .filterIsInstance<EntryFilter.Select<*>>()
+        .filter { it.state in 1 until it.values.size }
+        .joinToString { "${it.name}: ${it.values[it.state]}" }
+        .ifBlank { null }
+}
 
 internal fun hiAnimeFilterList(): EntryFilterList = EntryFilterList(
     HiAnimeSortFilter(),
@@ -51,6 +94,7 @@ internal fun hiAnimeFilterList(): EntryFilterList = EntryFilterList(
 )
 
 internal fun EntryFilterList.toHiAnimeSearchSelection(query: String): HiAnimeSearchSelection {
+    requireValidFilters()
     val filters = flatMap { filter ->
         when (filter) {
             is HiAnimeReleasePeriodFilter -> filter.state

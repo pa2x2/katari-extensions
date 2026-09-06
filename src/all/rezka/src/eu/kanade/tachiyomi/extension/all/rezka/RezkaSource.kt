@@ -5,7 +5,6 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.source.entry.ChapterWebViewSource
-import eu.kanade.tachiyomi.source.entry.EntryFilter
 import eu.kanade.tachiyomi.source.entry.EntryFilterList
 import eu.kanade.tachiyomi.source.entry.EntryHttpSource
 import eu.kanade.tachiyomi.source.entry.EntryMedia
@@ -73,6 +72,8 @@ internal class RezkaSource(
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
+    private val search by lazy { RezkaSearch(baseUrl, sectionPath, pathSegment, filterConfig) }
+
     override fun getChapterUrl(chapter: SEntryChapter): String = chapter.url.toRezkaChildWebUrl(baseUrl)
 
     private val json by lazy {
@@ -82,7 +83,7 @@ internal class RezkaSource(
     }
 
     override suspend fun getPopularContent(page: Int): EntryPageResult<SEntry> {
-        return fetchListingPage(sectionListingUrl(page, filter = "popular"))
+        return fetchListingPage(search.sectionListingUrl(page, filter = "popular"))
     }
 
     override suspend fun getSearchContent(
@@ -91,17 +92,17 @@ internal class RezkaSource(
         filters: EntryFilterList,
     ): EntryPageResult<SEntry> {
         val trimmedQuery = query.trim()
-        val selectedFilters = selectedFilters(filters)
+        val selectedFilters = search.selection(filters)
 
         if (trimmedQuery.isBlank()) {
             val url = when (selectedFilters.browseMode) {
-                BrowseMode.CATALOG -> sectionListingUrl(
+                BrowseMode.CATALOG -> search.sectionListingUrl(
                     page = page,
                     filter = selectedFilters.listingMode.queryValue,
                     genreSlug = selectedFilters.genre.slug,
                 )
-                BrowseMode.BEST_BY_YEAR -> bestByYearUrl(page, selectedFilters.bestYear)
-                BrowseMode.COLLECTIONS -> collectionListingUrl(
+                BrowseMode.BEST_BY_YEAR -> search.bestByYearUrl(page, selectedFilters.bestYear)
+                BrowseMode.COLLECTIONS -> search.collectionListingUrl(
                     page = page,
                     collectionSlug = selectedFilters.collection.slug,
                     filter = selectedFilters.collectionListingMode.queryValue,
@@ -123,16 +124,10 @@ internal class RezkaSource(
     }
 
     override suspend fun getLatestUpdates(page: Int): EntryPageResult<SEntry> {
-        return fetchListingPage(sectionListingUrl(page))
+        return fetchListingPage(search.sectionListingUrl(page))
     }
 
-    override fun getFilterList(): EntryFilterList = EntryFilterList(
-        EntryFilter.Header("Leave search empty to browse. Text search only applies section and genre."),
-        BrowseModeFilter(),
-        CatalogFilterGroup(filterConfig.genres),
-        BestByYearFilterGroup(),
-        CollectionFilterGroup(filterConfig.collections),
-    )
+    override fun getFilterList(): EntryFilterList = search.filters()
 
     override suspend fun getContentDetails(entry: SEntry): SEntry {
         return client.newCall(GET(baseUrl + entry.url, headers)).awaitSuccess().use { response ->
@@ -490,70 +485,6 @@ internal class RezkaSource(
     private fun matchesSelectedGenre(url: String, genreSlug: String?): Boolean {
         if (genreSlug == null) return true
         return url.lowercase().startsWith("/$sectionPath/$genreSlug/")
-    }
-
-    private fun selectedFilters(filters: EntryFilterList): SelectedSearchFilters {
-        val browseMode = filters.filterIsInstance<BrowseModeFilter>().firstOrNull()?.selected ?: BrowseMode.CATALOG
-        val catalogFilterGroup = filters.filterIsInstance<CatalogFilterGroup>().firstOrNull()
-        val bestByYearFilterGroup = filters.filterIsInstance<BestByYearFilterGroup>().firstOrNull()
-        val collectionFilterGroup = filters.filterIsInstance<CollectionFilterGroup>().firstOrNull()
-
-        return SelectedSearchFilters(
-            browseMode = browseMode,
-            listingMode = catalogFilterGroup?.selectedListingMode ?: LISTING_MODES.first(),
-            genre = catalogFilterGroup?.selectedGenre ?: filterConfig.genres.first(),
-            bestYear = bestByYearFilterGroup?.selectedYear ?: DEFAULT_BEST_BROWSE_YEAR,
-            collection = collectionFilterGroup?.selectedCollection ?: filterConfig.collections.first(),
-            collectionListingMode = collectionFilterGroup?.selectedListingMode ?: LISTING_MODES.first(),
-        )
-    }
-
-    private fun sectionListingUrl(page: Int, filter: String? = null, genreSlug: String? = null): String {
-        val sectionBasePath = buildString {
-            append(baseUrl)
-            append('/')
-            append(sectionPath)
-            append('/')
-            if (genreSlug != null) {
-                append(genreSlug)
-                append('/')
-            }
-        }
-        val pagePath = if (page == 1) {
-            sectionBasePath
-        } else {
-            "${sectionBasePath}page/$page/"
-        }
-
-        return if (filter == null) {
-            pagePath
-        } else {
-            "$pagePath?filter=$filter"
-        }
-    }
-
-    private fun bestByYearUrl(page: Int, year: Int): String {
-        val basePath = "$baseUrl/$sectionPath/best/$year/"
-        return if (page == 1) {
-            basePath
-        } else {
-            "${basePath}page/$page/"
-        }
-    }
-
-    private fun collectionListingUrl(page: Int, collectionSlug: String, filter: String? = null): String {
-        val basePath = "$baseUrl/collections/$collectionSlug/"
-        val pagePath = if (page == 1) {
-            basePath
-        } else {
-            "${basePath}page/$page/"
-        }
-
-        return if (filter == null) {
-            pagePath
-        } else {
-            "$pagePath?filter=$filter"
-        }
     }
 
     private suspend fun fetchListingPage(url: String): EntryPageResult<SEntry> {

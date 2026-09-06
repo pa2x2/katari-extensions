@@ -38,13 +38,13 @@ internal object ReadNovelFullParser {
         }
 
     fun parseChapter(document: Document): ReadNovelFullChapterContent {
-        val content = document.selectFirst("#chr-content")?.clone()
+        val content = document.selectFirst("#chr-content")?.readNovelFullProseRoot()
             ?: error("ReadNovelFull returned no chapter content")
         content.select("script, noscript, form, button, input, .ads, .advertisement").remove()
         content.select("p, div").filter(Element::isBlank).forEach(Element::remove)
         val assets = content.normalizeReadNovelFullProse()
-        val html = content.html().trim()
-        require(html.isNotBlank()) { "ReadNovelFull returned an empty chapter" }
+        require(content.html().isNotBlank()) { "ReadNovelFull returned an empty chapter" }
+        val html = content.outerHtml().trim()
         return ReadNovelFullChapterContent(
             title = document.selectFirst("#chapter .chr-title")?.text()?.trim()?.ifBlank { null },
             html = html,
