@@ -1,0 +1,12 @@
+{
+  "sources": [
+    {
+      "key": "brightnovels",
+      "id": 500000012,
+      "lang": "en",
+      "name": "Bright Novels",
+      "baseUrl": "https://brightnovels.com",
+      "supportedEntryTypes": ["BOOK"]
+    }
+  ]
+}
