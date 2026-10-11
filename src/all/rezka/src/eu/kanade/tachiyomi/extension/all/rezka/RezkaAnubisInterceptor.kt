@@ -9,6 +9,7 @@ import android.webkit.WebViewClient
 import androidx.core.content.ContextCompat
 import eu.kanade.tachiyomi.network.AndroidCookieJar
 import eu.kanade.tachiyomi.network.interceptor.WebViewInterceptor
+import okhttp3.Cookie
 import okhttp3.Interceptor
 import okhttp3.Request
 import okhttp3.Response
@@ -38,12 +39,22 @@ internal class RezkaAnubisInterceptor(
     ): Response = synchronized(challengeLock) {
         response.close()
 
-        if (!hasAuthCookie(request)) {
-            cookieManager.remove(request.url, ANUBIS_COOKIE_NAMES, 0)
-            resolveWithWebView(request)
+        // Another request may have passed the check while this one waited for the lock.
+        if (hasAuthCookie(request)) {
+            val retryResponse = chain.proceed(request)
+            if (!shouldIntercept(retryResponse)) return retryResponse
+            retryResponse.close()
         }
 
-        chain.proceed(request)
+        clearAnubisCookies(request)
+        resolveWithWebView(request)
+
+        val retryResponse = chain.proceed(request)
+        if (shouldIntercept(retryResponse)) {
+            retryResponse.close()
+            throw challengeRequired("the check was still shown after it passed")
+        }
+        retryResponse
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -88,26 +99,45 @@ internal class RezkaAnubisInterceptor(
         }
 
         if (!bypassed) {
-            throw IOException(
-                pageError?.let { "Rezka anti-bot verification failed: $it" }
-                    ?: "Rezka anti-bot verification timed out",
-            )
+            throw challengeRequired(pageError ?: "timed out")
         }
     }
 
+    // Anubis suffixes cookie names with a per-deployment hash, e.g. techaro.lol-anubis-auth-d82da6a5.
     private fun hasAuthCookie(request: Request): Boolean {
-        return cookieManager.get(request.url).any { it.name == ANUBIS_AUTH_COOKIE }
+        return cookieManager.get(request.url).any { it.name.startsWith(ANUBIS_AUTH_COOKIE) }
+    }
+
+    private fun clearAnubisCookies(request: Request) {
+        val expiredCookies = cookieManager.get(request.url)
+            .filter { it.name.startsWith(ANUBIS_COOKIE_PREFIX) }
+            .map { cookie ->
+                Cookie.Builder()
+                    .name(cookie.name)
+                    .value("")
+                    .hostOnlyDomain(request.url.host)
+                    .path("/")
+                    .expiresAt(0)
+                    .build()
+            }
+        if (expiredCookies.isNotEmpty()) {
+            cookieManager.saveFromResponse(request.url, expiredCookies)
+        }
+    }
+
+    private fun challengeRequired(reason: String): IOException {
+        return IOException(
+            "Rezka anti-bot check could not be passed automatically ($reason). " +
+                "Open the title in WebView, wait until the site loads, then try again.",
+        )
     }
 
     private companion object {
         const val REZKA_HOST = "rezka.ag"
-        const val ANUBIS_AUTH_COOKIE = "techaro.lol-anubis-auth"
+        const val ANUBIS_COOKIE_PREFIX = "techaro.lol-anubis-"
+        const val ANUBIS_AUTH_COOKIE = "${ANUBIS_COOKIE_PREFIX}auth"
         const val CHALLENGE_PEEK_BYTES = 64L * 1024L
 
-        val ANUBIS_COOKIE_NAMES = listOf(
-            ANUBIS_AUTH_COOKIE,
-            "techaro.lol-anubis-cookie-verification",
-        )
         val ANUBIS_CHALLENGE_MARKERS = listOf(
             "id=\"anubis_version\"",
             "id=\"anubis_challenge\"",
