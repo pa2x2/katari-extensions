@@ -5,17 +5,15 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import java.util.Calendar
-
-internal val YEAR_REGEX = Regex("(?:19|20)\\d{2}")
+import java.util.Locale
 
 internal val DEFAULT_BEST_BROWSE_YEAR = Calendar.getInstance().get(Calendar.YEAR)
 
 internal val RELEASE_DATE_REGEX = Regex("""(\d{1,2})\s+([а-я]+)\s+(\d{4})""")
 internal val SCHEDULE_EPISODE_REGEX = Regex("""(\d+)\s*сезон\s*(\d+)\s*серия""")
-internal val SEASON_NUMBER_REGEX = Regex("""(\d+)\s*сезон""")
+internal val SEASON_NUMBER_REGEX = Regex("""(\d+)\s*сезон|сезон\s*(\d+)""")
 
 internal val RU_MONTHS = mapOf(
     "января" to Calendar.JANUARY,
@@ -31,6 +29,24 @@ internal val RU_MONTHS = mapOf(
     "ноября" to Calendar.NOVEMBER,
     "декабря" to Calendar.DECEMBER,
 )
+
+/** Reads a date such as "30 сентября 2013" or "13 ноября 2026 года" as local midnight. */
+internal fun parseRussianDate(text: String?): Long? {
+    val normalized = text
+        ?.lowercase(Locale.ROOT)
+        ?.replace('ё', 'е')
+        ?.ifBlank { null }
+        ?: return null
+    val match = RELEASE_DATE_REGEX.find(normalized) ?: return null
+    val day = match.groupValues[1].toIntOrNull() ?: return null
+    val month = RU_MONTHS[match.groupValues[2]] ?: return null
+    val year = match.groupValues[3].toIntOrNull() ?: return null
+
+    return Calendar.getInstance().apply {
+        clear()
+        set(year, month, day)
+    }.timeInMillis
+}
 
 internal fun String.encodeForQuery(): String {
     return java.net.URLEncoder.encode(this, Charsets.UTF_8.name())

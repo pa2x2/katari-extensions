@@ -22,7 +22,7 @@ internal fun NovelBuddyChapterContent.toBookMedia(
     val location = BookResourceLocation.InlineText(normalized.html, PROSE_MEDIA_TYPE)
     val resource = BookSourceResource(
         id = id,
-        title = name,
+        title = name.decodeNovelBuddyText(),
         order = 0,
         mediaType = PROSE_MEDIA_TYPE,
         size = normalized.html.encodeToByteArray().size.toLong(),

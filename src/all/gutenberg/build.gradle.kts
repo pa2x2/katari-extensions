@@ -9,8 +9,8 @@ configureSharedExtensionModule(project)
 
 android {
     defaultConfig {
-        versionCode = 2
-        versionName = "2.6.0"
+        versionCode = 3
+        versionName = "3.0.0"
         applicationId = "eu.kanade.tachiyomi.extension.all.gutenberg"
         manifestPlaceholders += mapOf(
             "appName" to "Katari: Project Gutenberg",

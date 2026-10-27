@@ -64,11 +64,14 @@ internal data class BrightNovelsChapterEntry(
     val price: Int = 0,
     @SerialName("is_premium") val isPremium: Boolean = false,
     @SerialName("index_at") val indexAt: String? = null,
+    /** The site's reading position of the chapter, counting from 1. */
+    val index: Int = 0,
 )
 
 @Serializable
 internal data class BrightNovelsChaptersResponse(
-    val chapters: List<BrightNovelsChapterEntry> = emptyList(),
+    // Required: an empty list is a series without chapters, so a response without the field must fail instead.
+    val chapters: List<BrightNovelsChapterEntry>,
     @SerialName("unlockedChapterIds") val unlockedChapterIds: List<Long> = emptyList(),
 )
 
@@ -127,7 +130,11 @@ internal fun BrightNovelsSeriesDetail.applyTo(entry: SEntry): SEntry = entry.cop
     initialized = true
 }
 
-internal fun BrightNovelsChapterEntry.toSEntryChapter(seriesSlug: String): SEntryChapter =
+/** Newest first, as the site lists them. */
+internal fun BrightNovelsChaptersResponse.toSEntryChapters(seriesSlug: String): List<SEntryChapter> =
+    chapters.sortedByDescending(BrightNovelsChapterEntry::index).map { it.toSEntryChapter(seriesSlug) }
+
+private fun BrightNovelsChapterEntry.toSEntryChapter(seriesSlug: String): SEntryChapter =
     SEntryChapter.create().apply {
         url = brightNovelsChapterUrl(seriesSlug, slug)
         name = if (isPremium) {

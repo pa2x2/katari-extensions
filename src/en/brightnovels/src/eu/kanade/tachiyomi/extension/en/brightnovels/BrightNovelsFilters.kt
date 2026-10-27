@@ -92,6 +92,11 @@ internal fun EntryFilterList.toBrightNovelsParams(): Map<String, String> {
     }
 }
 
+/** Whether the catalogue parameters narrow or reorder the catalogue beyond its defaults. */
+internal fun Map<String, String>.hasBrightNovelsConstraints(): Boolean = this != DEFAULT_PARAMS
+
+private val DEFAULT_PARAMS = mapOf("genre_mode" to "or", "order" to "desc")
+
 private inline fun <reified T : EntryFilter.Select<String>> List<EntryFilter<*>>.selectValue(values: List<String?>): String? =
     filterIsInstance<T>().firstOrNull()?.let { values[it.state] }
 

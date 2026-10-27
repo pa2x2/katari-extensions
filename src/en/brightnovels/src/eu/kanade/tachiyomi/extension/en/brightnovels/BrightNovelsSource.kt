@@ -2,10 +2,12 @@ package eu.kanade.tachiyomi.extension.en.brightnovels
 
 import eu.kanade.tachiyomi.extension.BuildConfig
 import eu.kanade.tachiyomi.source.entry.ChapterWebViewSource
+import eu.kanade.tachiyomi.source.entry.EmptyChapterListSource
 import eu.kanade.tachiyomi.source.entry.EntryFilterList
 import eu.kanade.tachiyomi.source.entry.EntryHttpSource
 import eu.kanade.tachiyomi.source.entry.EntryMedia
 import eu.kanade.tachiyomi.source.entry.EntryPageResult
+import eu.kanade.tachiyomi.source.entry.EntryRefresh
 import eu.kanade.tachiyomi.source.entry.EntryType
 import eu.kanade.tachiyomi.source.entry.PlaybackSelection
 import eu.kanade.tachiyomi.source.entry.SEntry
@@ -13,7 +15,8 @@ import eu.kanade.tachiyomi.source.entry.SEntryChapter
 import eu.kanade.tachiyomi.source.entry.SourceMetadata
 import okhttp3.OkHttpClient
 
-internal class BrightNovelsSource : EntryHttpSource(), ChapterWebViewSource, SourceMetadata {
+// Some listed series have no chapters yet; the site answers those with an empty chapter list.
+internal class BrightNovelsSource : EntryHttpSource(), ChapterWebViewSource, SourceMetadata, EmptyChapterListSource {
     override val id: Long = BuildConfig.SOURCE_ID_BRIGHTNOVELS
     override val name: String = "Bright Novels"
     override val lang: String = "en"
@@ -57,31 +60,34 @@ internal class BrightNovelsSource : EntryHttpSource(), ChapterWebViewSource, Sou
         query: String,
         filters: EntryFilterList,
     ): EntryPageResult<SEntry> {
+        require(page >= 1) { "page must be positive" }
         val trimmed = query.trim()
-        if (trimmed.isNotEmpty()) {
+        val params = filters.toBrightNovelsParams()
+        // A plain query keeps the quick search's title matches; with filters, the catalogue searches and pages.
+        if (trimmed.isNotEmpty() && !params.hasBrightNovelsConstraints()) {
             if (page > 1) return EntryPageResult(emptyList(), false)
             return EntryPageResult(api.search(trimmed).map(BrightNovelsSeriesItem::toSEntry), false)
         }
-        require(page >= 1) { "page must be positive" }
-        val result = api.catalogue(page, filters.toBrightNovelsParams())
+        val result = api.catalogue(page, if (trimmed.isEmpty()) params else params + ("search" to trimmed))
         return EntryPageResult(
             items = result.data.map(BrightNovelsSeriesItem::toSEntry),
             hasNextPage = result.currentPage < result.lastPage,
         )
     }
 
-    override suspend fun getContentDetails(entry: SEntry): SEntry {
+    override suspend fun refresh(
+        entry: SEntry,
+        existingChapters: List<SEntryChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): EntryRefresh {
         val key = entry.url.toBrightNovelsEntryKey()
             ?: error("Invalid Bright Novels entry: ${entry.url}")
-        return api.seriesDetail(key.slug).applyTo(entry)
-    }
-
-    override suspend fun getChapterList(entry: SEntry): List<SEntryChapter> {
-        val key = entry.url.toBrightNovelsEntryKey()
-            ?: error("Invalid Bright Novels entry: ${entry.url}")
-        return api.allChapters(key.slug).chapters
-            .map { it.toSEntryChapter(key.slug) }
-            .sortedBy(SEntryChapter::chapterNumber)
+        // Details and chapters are separate requests, so only the requested part is fetched.
+        return EntryRefresh(
+            entry = if (fetchDetails) api.seriesDetail(key.slug).applyTo(entry) else entry,
+            chapters = if (fetchChapters) api.allChapters(key.slug).toSEntryChapters(key.slug) else existingChapters,
+        )
     }
 
     override suspend fun getMedia(chapter: SEntryChapter, selection: PlaybackSelection): EntryMedia {

@@ -4,12 +4,20 @@ import okhttp3.Interceptor
 import okhttp3.Response
 import java.time.ZonedDateTime
 
-/** Serializes requests to the HTML-only service at the conservative discovered interval. */
+/**
+ * Serializes page requests to the HTML-only service at the conservative discovered interval. Covers from the
+ * separate image host, which Katari loads through the source's client, pass straight through like a browser loads them.
+ */
 internal class ReadNovelFullThrottleInterceptor : Interceptor {
     private val lock = Any()
     private var nextRequestAtMillis = 0L
 
-    override fun intercept(chain: Interceptor.Chain): Response = synchronized(lock) {
+    override fun intercept(chain: Interceptor.Chain): Response {
+        if (chain.request().url.host != SITE_HOST) return chain.proceed(chain.request())
+        return throttled(chain)
+    }
+
+    private fun throttled(chain: Interceptor.Chain): Response = synchronized(lock) {
         waitUntilAllowed()
         var response = chain.proceed(chain.request())
         if (response.code == TOO_MANY_REQUESTS) {
@@ -40,5 +48,6 @@ internal class ReadNovelFullThrottleInterceptor : Interceptor {
         const val TOO_MANY_REQUESTS = 429
         const val RETRY_AFTER_HEADER = "Retry-After"
         const val REQUEST_INTERVAL_MILLIS = 1_000L
+        const val SITE_HOST = "readnovelfull.com"
     }
 }

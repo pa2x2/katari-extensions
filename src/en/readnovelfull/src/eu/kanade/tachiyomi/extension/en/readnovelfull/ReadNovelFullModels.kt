@@ -2,7 +2,6 @@ package eu.kanade.tachiyomi.extension.en.readnovelfull
 
 import eu.kanade.tachiyomi.source.entry.EntryType
 import eu.kanade.tachiyomi.source.entry.SEntry
-import eu.kanade.tachiyomi.source.entry.SEntryChapter
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
@@ -24,6 +23,14 @@ internal data class ReadNovelFullDetails(
     val genres: List<String>,
     val status: String?,
     val thumbnailUrl: String?,
+    /** The page's "Latest chapter" row. */
+    val latestChapter: ReadNovelFullLatestChapter?,
+)
+
+/** The newest chapter with its release time as the site words it, such as "5 years ago". */
+internal data class ReadNovelFullLatestChapter(
+    val chapter: ReadNovelFullChapter,
+    val timeText: String?,
 )
 
 internal data class ReadNovelFullChapter(
@@ -65,23 +72,10 @@ internal fun SEntry.readNovelFullNovelId(): String? = memo[NOVEL_ID_MEMO_KEY]
     ?.jsonPrimitive
     ?.contentOrNull
 
-internal fun ReadNovelFullChapter.toSEntryChapter(index: Int): SEntryChapter = SEntryChapter.create().apply {
-    url = this@toSEntryChapter.url
-    name = this@toSEntryChapter.name
-    dateUpload = 0L
-    chapterNumber = this@toSEntryChapter.name.readNovelFullChapterNumber() ?: (index + 1).toDouble()
-}
-
 private fun String?.toReadNovelFullStatus(): Int = when (this?.trim()?.lowercase()) {
     "ongoing" -> SEntry.ONGOING
     "completed", "complete" -> SEntry.COMPLETED
     else -> SEntry.UNKNOWN
 }
 
-private fun String.readNovelFullChapterNumber(): Double? = CHAPTER_NUMBER_REGEX.find(this)
-    ?.groupValues
-    ?.getOrNull(1)
-    ?.toDoubleOrNull()
-
 private const val NOVEL_ID_MEMO_KEY = "readnovelfull.novelId"
-private val CHAPTER_NUMBER_REGEX = Regex("\\bchapter\\s+(\\d+(?:\\.\\d+)?)", RegexOption.IGNORE_CASE)

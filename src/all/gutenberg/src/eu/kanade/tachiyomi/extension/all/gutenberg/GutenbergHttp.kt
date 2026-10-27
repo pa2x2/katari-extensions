@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.all.gutenberg
 
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.awaitSuccess
+import eu.kanade.tachiyomi.network.get
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import okhttp3.Headers
@@ -32,7 +31,7 @@ internal class GutenbergHttp(private val client: OkHttpClient, private val heade
 
     suspend fun plainTextDocument(path: String): Document {
         val url = gutenbergUrl(path)
-        return client.newCall(GET(url, headers)).awaitSuccess().use { response ->
+        return client.get(url, headers).use { response ->
             Jsoup.parse("<html><body></body></html>", response.request.url.toString()).apply {
                 body().appendElement("pre").text(response.body.string())
             }
@@ -43,7 +42,7 @@ internal class GutenbergHttp(private val client: OkHttpClient, private val heade
         val url = gutenbergUrl(path)
         val now = System.currentTimeMillis()
         cache[url]?.takeIf { now - it.first < 60_000 }?.let { return@withLock it.second.clone() }
-        val document = client.newCall(GET(url, headers)).awaitSuccess().use { response ->
+        val document = client.get(url, headers).use { response ->
             // Never admit an error/challenge page into the metadata cache.
             Jsoup.parse(response.body.string(), response.request.url.toString())
         }

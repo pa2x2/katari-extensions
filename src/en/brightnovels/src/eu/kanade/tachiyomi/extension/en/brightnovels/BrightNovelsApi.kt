@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.en.brightnovels
 
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.awaitSuccess
+import eu.kanade.tachiyomi.network.get
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.booleanOrNull
@@ -24,6 +23,7 @@ internal class BrightNovelsApi(
         explicitNulls = false
     }
 
+    /** The catalogue page, which also searches titles when [params] carry `search`, together with its filters. */
     suspend fun catalogue(page: Int, params: Map<String, String>): BrightNovelsSeriesListPage {
         val url = "$BRIGHTNOVELS_URL/series".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
@@ -33,11 +33,12 @@ internal class BrightNovelsApi(
         return props.required("seriesList")
     }
 
+    /** The site's quick search: its first ten matches for [query], without filters or further pages. */
     suspend fun search(query: String): List<BrightNovelsSeriesItem> {
         val url = "$BRIGHTNOVELS_URL/api/search".toHttpUrl().newBuilder()
             .addQueryParameter("query", query)
             .build()
-        return get<BrightNovelsSearchResponse>(url.toString()).data.series
+        return getJson<BrightNovelsSearchResponse>(url.toString()).data.series
     }
 
     suspend fun seriesDetail(slug: String): BrightNovelsSeriesDetail {
@@ -52,7 +53,7 @@ internal class BrightNovelsApi(
             .addPathSegment(slug)
             .addPathSegment("chapters")
             .build()
-        val result = get<BrightNovelsChaptersResponse>(url.toString())
+        val result = getJson<BrightNovelsChaptersResponse>(url.toString())
         require(result.chapters.size <= MAX_CHAPTERS) { "Bright Novels returned too many chapters" }
         require(result.chapters.distinctBy(BrightNovelsChapterEntry::id).size == result.chapters.size) {
             "Bright Novels returned duplicate chapter identities"
@@ -73,7 +74,7 @@ internal class BrightNovelsApi(
     }
 
     private suspend fun inertiaProps(url: String, component: String): JsonObject {
-        val body = client.newCall(GET(url, headers)).awaitSuccess().use { it.body.string() }
+        val body = client.get(url, headers).use { it.body.string() }
         // Jsoup decodes the HTML-escaped JSON payload carried by the data-page attribute.
         val raw = Jsoup.parse(body, url).selectFirst("[data-page]")?.attr("data-page")
             .takeUnless { it.isNullOrBlank() }
@@ -86,8 +87,8 @@ internal class BrightNovelsApi(
         return page.props
     }
 
-    private suspend inline fun <reified T> get(url: String): T =
-        client.newCall(GET(url, headers)).awaitSuccess().use {
+    private suspend inline fun <reified T> getJson(url: String): T =
+        client.get(url, headers).use {
             json.decodeFromString(it.body.string())
         }
 

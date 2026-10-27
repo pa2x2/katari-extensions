@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.en.novelbuddy
 
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.awaitSuccess
+import eu.kanade.tachiyomi.network.get
 import kotlinx.serialization.json.Json
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -28,10 +27,10 @@ internal class NovelBuddyApi(
                 selection.maximumChapters?.let { addQueryParameter("max_ch", it.toString()) }
             }
             .build()
-        return get<NovelBuddySearchResponse>(url.toString()).data
+        return getJson<NovelBuddySearchResponse>(url.toString()).data
     }
 
-    suspend fun title(slug: String): NovelBuddyTitle = get<NovelBuddyTitleResponse>(
+    suspend fun title(slug: String): NovelBuddyTitle = getJson<NovelBuddyTitleResponse>(
         "$API_URL/titles/by-slug/$slug?include=details",
     ).data.title
 
@@ -39,7 +38,7 @@ internal class NovelBuddyApi(
         val url = "$API_URL/titles/$titleId/chapters".toHttpUrl().newBuilder()
             .apply { cacheVersion?.let { addQueryParameter("cv", it.toString()) } }
             .build()
-        val result = get<NovelBuddyChaptersResponse>(url.toString()).data.chapters
+        val result = getJson<NovelBuddyChaptersResponse>(url.toString()).data.chapters
         require(result.size <= MAX_CHAPTERS) { "NovelBuddy returned too many chapters" }
         require(result.distinctBy(NovelBuddyChapter::id).size == result.size) {
             "NovelBuddy returned duplicate chapter identities"
@@ -48,11 +47,15 @@ internal class NovelBuddyApi(
     }
 
     suspend fun chapter(titleSlug: String, chapterSlug: String): NovelBuddyChapterContent =
-        get<NovelBuddyChapterResponse>(
+        getJson<NovelBuddyChapterResponse>(
             "$API_URL/titles/by-slug/$titleSlug/chapters/$chapterSlug?include=details",
         ).data.chapter
 
-    private suspend inline fun <reified T> get(url: String): T = client.newCall(GET(url, headers)).awaitSuccess().use {
+    /** Titles the site recommends under "You may also like" on [titleId]'s page. */
+    suspend fun recommendations(titleId: String): List<NovelBuddyTitle> =
+        getJson<NovelBuddyRecommendationsResponse>("$API_URL/recommendations/$titleId").data
+
+    private suspend inline fun <reified T> getJson(url: String): T = client.get(url, headers).use {
         json.decodeFromString(it.body.string())
     }
 

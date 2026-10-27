@@ -5,7 +5,6 @@ import mihon.book.api.BookCatalogCoverage
 import mihon.book.api.BookContentDescriptor
 import mihon.book.api.BookResourceAvailability
 import org.jsoup.nodes.Document
-import java.security.MessageDigest
 
 internal fun GutenbergBook.readableFormat(preference: String): GutenbergFormat {
     val order = when (preference) {
@@ -38,32 +37,13 @@ internal fun GutenbergBook.epubMedia(format: GutenbergFormat): EntryMedia.Book {
     )
 }
 
-/** Converts HTML assets to catalogue resource identities understood by the canonical BOOK reader. */
+/**
+ * Serves an HTML or plain-text edition as one prose chapter. Illustrations stay as the edition names them, mostly
+ * relative to the edition's address; Katari fetches them from there and keeps them with downloads. The edition's own
+ * style sheet, with its figure boxes and floats, stays in the document.
+ */
 internal fun GutenbergBook.htmlMedia(document: Document): EntryMedia.Book {
     document.select("script, noscript, form, input, button, iframe").remove()
-    val assets = linkedMapOf<String, BookSourceResource>()
-    document.select("img[src]").forEach { image ->
-        val url = image.absUrl("src").takeIf { it.startsWith("https://") || it.startsWith("http://") }
-            ?: return@forEach image.removeAttr("src").let { }
-        val resourceId = "image-" + MessageDigest.getInstance("SHA-256").digest(url.toByteArray())
-            .joinToString("") { "%02x".format(it) }.take(24)
-        val mime = when (url.substringBefore('?').substringAfterLast('.').lowercase()) {
-            "jpg", "jpeg" -> "image/jpeg"
-            "png" -> "image/png"
-            "gif" -> "image/gif"
-            "svg" -> "image/svg+xml"
-            "webp" -> "image/webp"
-            else -> null
-        }
-        assets[resourceId] = BookSourceResource(
-            id = resourceId,
-            title = image.attr("alt").ifBlank { null },
-            mediaType = mime,
-            availability = BookResourceAvailability.AVAILABLE,
-            location = BookResourceLocation.RemoteRequest(url),
-        )
-        image.attr("src", resourceId)
-    }
     document.select("a[href]").filterNot { it.attr("href").startsWith('#') }.forEach {
         val url = it.absUrl("href")
         if (url.startsWith("https://") || url.startsWith("http://")) it.attr("href", url) else it.removeAttr("href")
@@ -85,10 +65,13 @@ internal fun GutenbergBook.htmlMedia(document: Document): EntryMedia.Book {
                 mediaType = "text/html",
                 availability = BookResourceAvailability.AVAILABLE,
                 location = location,
-            )) + assets.values,
+            )),
             coverage = BookCatalogCoverage.COMPLETE,
         ),
         initialResourceId = resourceId,
         initialResourceLocation = location,
+        linkedResources = BookLinkedResources(
+            baseUrl = document.location().takeIf { it.startsWith("https://") || it.startsWith("http://") },
+        ),
     )
 }

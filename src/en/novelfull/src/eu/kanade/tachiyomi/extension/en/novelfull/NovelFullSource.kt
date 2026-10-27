@@ -1,20 +1,24 @@
 package eu.kanade.tachiyomi.extension.en.novelfull
 
 import eu.kanade.tachiyomi.extension.BuildConfig
+import eu.kanade.tachiyomi.source.entry.ChapterListRest
 import eu.kanade.tachiyomi.source.entry.ChapterWebViewSource
 import eu.kanade.tachiyomi.source.entry.EntryFilterList
 import eu.kanade.tachiyomi.source.entry.EntryHttpSource
 import eu.kanade.tachiyomi.source.entry.EntryMedia
 import eu.kanade.tachiyomi.source.entry.EntryPageResult
+import eu.kanade.tachiyomi.source.entry.EntryRefresh
 import eu.kanade.tachiyomi.source.entry.EntryType
 import eu.kanade.tachiyomi.source.entry.PlaybackSelection
+import eu.kanade.tachiyomi.source.entry.RelatedEntriesSource
+import eu.kanade.tachiyomi.source.entry.RelatedEntryGroup
 import eu.kanade.tachiyomi.source.entry.SEntry
 import eu.kanade.tachiyomi.source.entry.SEntryChapter
 import eu.kanade.tachiyomi.source.entry.SourceMetadata
 import okhttp3.Headers
 import okhttp3.OkHttpClient
 
-internal class NovelFullSource : EntryHttpSource(), ChapterWebViewSource, SourceMetadata {
+internal class NovelFullSource : EntryHttpSource(), ChapterWebViewSource, RelatedEntriesSource, SourceMetadata {
     override val id: Long = BuildConfig.SOURCE_ID_NOVELFULL
     override val name: String = "NovelFull"
     override val lang: String = "en"
@@ -36,6 +40,9 @@ internal class NovelFullSource : EntryHttpSource(), ChapterWebViewSource, Source
 
     override fun getFilterList(): EntryFilterList = novelFullFilterList()
 
+    // The site's keyword search has no genre or status parameters
+    override val textSearchUsesFilters: Boolean = false
+
     override suspend fun getPopularContent(page: Int): EntryPageResult<SEntry> = catalogue(page, "/most-popular")
 
     override suspend fun getLatestUpdates(page: Int): EntryPageResult<SEntry> = catalogue(page, "/latest-release-novel")
@@ -53,17 +60,28 @@ internal class NovelFullSource : EntryHttpSource(), ChapterWebViewSource, Source
         }
     }
 
-    override suspend fun getContentDetails(entry: SEntry): SEntry =
-        NovelFullParser.parseDetails(api.document(entry.url)).applyTo(entry)
-
-    override suspend fun getChapterList(entry: SEntry): List<SEntryChapter> {
-        val novelId = entry.novelFullNovelId() ?: NovelFullParser
-            .parseDetails(api.document(entry.url))
-            .novelId
-            ?: error("NovelFull returned no novel ID")
-        return NovelFullParser.parseChapterArchive(api.chapterArchive(novelId))
-            .map(NovelFullChapter::toSEntryChapter)
+    override suspend fun refresh(
+        entry: SEntry,
+        existingChapters: List<SEntryChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): EntryRefresh {
+        if (!fetchDetails && !fetchChapters) return EntryRefresh(entry, existingChapters)
+        val page = NovelFullParser.parseDetails(api.document(entry.url))
+        val details = if (fetchDetails) page.applyTo(entry) else entry
+        if (!fetchChapters) return EntryRefresh(details, existingChapters)
+        page.newestChaptersOver(existingChapters)?.let { newest ->
+            return EntryRefresh(details, newest, rest = ChapterListRest.Unchanged)
+        }
+        val novelId = page.novelId ?: entry.novelFullNovelId() ?: error("NovelFull returned no novel ID")
+        val chapters = NovelFullParser.parseChapterArchive(api.chapterArchive(novelId)).toNewestFirstChapters()
+        return EntryRefresh(details, chapters)
     }
+
+    override suspend fun getRelatedEntries(entry: SEntry): List<RelatedEntryGroup> =
+        NovelFullParser.parseRelated(api.document(entry.url)).map { group ->
+            RelatedEntryGroup(title = group.title, entries = group.entries.map(NovelFullEntry::toSEntry))
+        }
 
     override suspend fun getMedia(chapter: SEntryChapter, selection: PlaybackSelection): EntryMedia {
         val content = NovelFullParser.parseChapter(api.document(chapter.url))

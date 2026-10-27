@@ -9,6 +9,8 @@ import android.webkit.WebViewClient
 import androidx.core.content.ContextCompat
 import eu.kanade.tachiyomi.network.AndroidCookieJar
 import eu.kanade.tachiyomi.network.interceptor.WebViewInterceptor
+import eu.kanade.tachiyomi.network.interceptor.WebViewInterceptorMessages
+import eu.kanade.tachiyomi.util.system.toWebViewHeaders
 import okhttp3.Cookie
 import okhttp3.Interceptor
 import okhttp3.Request
@@ -20,7 +22,7 @@ internal class RezkaAnubisInterceptor(
     context: Context,
     private val cookieManager: AndroidCookieJar,
     defaultUserAgentProvider: () -> String,
-) : WebViewInterceptor(context, defaultUserAgentProvider) {
+) : WebViewInterceptor(context, defaultUserAgentProvider, RezkaWebViewMessages) {
 
     private val executor = ContextCompat.getMainExecutor(context)
 
@@ -85,7 +87,7 @@ internal class RezkaAnubisInterceptor(
                         }
                     }
                 }
-                loadUrl(request.url.toString(), parseHeaders(request.headers))
+                loadUrl(request.url.toString(), request.headers.toWebViewHeaders())
             }
         }
 
@@ -130,6 +132,15 @@ internal class RezkaAnubisInterceptor(
             "Rezka anti-bot check could not be passed automatically ($reason). " +
                 "Open the title in WebView, wait until the site loads, then try again.",
         )
+    }
+
+    // Katari's own wording isn't shared with extensions, so the check speaks for itself.
+    private object RezkaWebViewMessages : WebViewInterceptorMessages {
+        override fun webViewRequired(): String = "Rezka needs Android System WebView to pass its anti-bot check."
+
+        override fun webViewOutdated(): String = "Update Android System WebView to pass Rezka's anti-bot check."
+
+        override fun cloudflareBypassFailed(): String = "Rezka's anti-bot check could not be passed."
     }
 
     private companion object {

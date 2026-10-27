@@ -10,8 +10,8 @@ configureSharedExtensionModule(project)
 
 android {
     defaultConfig {
-        versionCode = 3
-        versionName = "2.6.0"
+        versionCode = 4
+        versionName = "3.0.0"
         applicationId = "eu.kanade.tachiyomi.extension.en.hianime"
 
         manifestPlaceholders += mapOf(

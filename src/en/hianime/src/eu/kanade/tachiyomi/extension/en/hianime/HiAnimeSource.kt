@@ -2,21 +2,23 @@ package eu.kanade.tachiyomi.extension.en.hianime
 
 import eu.kanade.tachiyomi.extension.BuildConfig
 import eu.kanade.tachiyomi.source.entry.ChapterWebViewSource
+import eu.kanade.tachiyomi.source.entry.DeferredStreamSource
 import eu.kanade.tachiyomi.source.entry.EmptyChapterListSource
 import eu.kanade.tachiyomi.source.entry.EntryFilterList
 import eu.kanade.tachiyomi.source.entry.EntryHttpSource
 import eu.kanade.tachiyomi.source.entry.EntryMedia
 import eu.kanade.tachiyomi.source.entry.EntryPageResult
+import eu.kanade.tachiyomi.source.entry.EntryRefresh
 import eu.kanade.tachiyomi.source.entry.EntryType
 import eu.kanade.tachiyomi.source.entry.EntryUriType
 import eu.kanade.tachiyomi.source.entry.PlaybackSelection
 import eu.kanade.tachiyomi.source.entry.RelatedEntriesSource
+import eu.kanade.tachiyomi.source.entry.RelatedEntryGroup
 import eu.kanade.tachiyomi.source.entry.ResolvableSource
 import eu.kanade.tachiyomi.source.entry.SEntry
 import eu.kanade.tachiyomi.source.entry.SEntryChapter
 import eu.kanade.tachiyomi.source.entry.SourceMetadata
-import eu.kanade.tachiyomi.source.entry.SubtitleSource
-import eu.kanade.tachiyomi.source.entry.VideoSubtitle
+import eu.kanade.tachiyomi.source.entry.VideoStream
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -27,7 +29,7 @@ internal class HiAnimeSource :
     EntryHttpSource(),
     ChapterWebViewSource,
     SourceMetadata,
-    SubtitleSource,
+    DeferredStreamSource,
     RelatedEntriesSource,
     EmptyChapterListSource,
     ResolvableSource {
@@ -44,7 +46,9 @@ internal class HiAnimeSource :
         .build()
 
     private val api by lazy { HiAnimeApi(client, headers) }
-    private val playbackResolver by lazy { HiAnimePlaybackResolver(api, headers, baseUrl) }
+    private val playbackResolver by lazy {
+        HiAnimePlaybackResolver(api, HiAnimeStreamExtractor(api, headers), baseUrl)
+    }
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .set("User-Agent", BROWSER_USER_AGENT)
@@ -74,24 +78,27 @@ internal class HiAnimeSource :
         return listing(url, page)
     }
 
-    override suspend fun getContentDetails(entry: SEntry): SEntry =
-        HiAnimeParser.parseDetails(api.document(entry.url)).applyTo(entry)
-
-    override suspend fun getChapterList(entry: SEntry): List<SEntryChapter> {
-        val animeId = entry.hiAnimeId() ?: error("HiAnime entry has no anime ID")
-        return HiAnimeParser.parseEpisodes(api.episodeDocument(animeId)).map(HiAnimeChapter::toSEntryChapter)
+    override suspend fun refresh(
+        entry: SEntry,
+        existingChapters: List<SEntryChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): EntryRefresh {
+        val refreshed = if (fetchDetails) details(entry) else entry
+        return EntryRefresh(
+            entry = refreshed,
+            chapters = if (fetchChapters) episodes(refreshed) else existingChapters,
+        )
     }
 
     override suspend fun getMedia(chapter: SEntryChapter, selection: PlaybackSelection): EntryMedia =
-        EntryMedia.Playback(playbackResolver.resolve(chapter, selection).descriptor)
+        EntryMedia.Playback(playbackResolver.describe(chapter, selection))
 
-    override suspend fun getSubtitles(
-        chapter: SEntryChapter,
-        selection: PlaybackSelection,
-    ): List<VideoSubtitle> = playbackResolver.resolve(chapter, selection).subtitles
+    override suspend fun resolveStream(chapter: SEntryChapter, stream: VideoStream): VideoStream =
+        playbackResolver.resolve(chapter, stream)
 
-    override suspend fun getRelatedEntries(entry: SEntry): List<SEntry> =
-        HiAnimeParser.parseRelated(api.document(entry.url)).map(HiAnimeEntry::toSEntry)
+    override suspend fun getRelatedEntries(entry: SEntry): List<RelatedEntryGroup> =
+        HiAnimeParser.parseRelated(api.document(entry.url)).map(HiAnimeRelatedGroup::toRelatedEntryGroup)
 
     override fun getUriType(uri: String): EntryUriType {
         val url = uri.toHiAnimeUrl() ?: return EntryUriType.Unknown
@@ -114,7 +121,7 @@ internal class HiAnimeSource :
             title = path.substringAfterLast('/').substringBeforeLast('-').replace('-', ' ')
             type = EntryType.ANIME
         }
-        return getContentDetails(entry)
+        return details(entry)
     }
 
     override suspend fun getChapter(uri: String): SEntryChapter {
@@ -126,6 +133,14 @@ internal class HiAnimeSource :
             .firstOrNull { it.id == episodeId }
             ?: error("HiAnime episode was not found")
         return chapter.toSEntryChapter()
+    }
+
+    private suspend fun details(entry: SEntry): SEntry =
+        HiAnimeParser.parseDetails(api.document(entry.url)).applyTo(entry)
+
+    private suspend fun episodes(entry: SEntry): List<SEntryChapter> {
+        val animeId = entry.hiAnimeId() ?: error("HiAnime entry has no anime ID")
+        return HiAnimeParser.parseEpisodes(api.episodeDocument(animeId)).map(HiAnimeChapter::toSEntryChapter)
     }
 
     private suspend fun catalogue(path: String, page: Int): EntryPageResult<SEntry> {

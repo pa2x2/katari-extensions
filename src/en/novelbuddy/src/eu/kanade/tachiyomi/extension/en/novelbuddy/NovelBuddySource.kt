@@ -1,20 +1,28 @@
 package eu.kanade.tachiyomi.extension.en.novelbuddy
 
 import eu.kanade.tachiyomi.extension.BuildConfig
+import eu.kanade.tachiyomi.source.entry.ChapterListRest
 import eu.kanade.tachiyomi.source.entry.ChapterWebViewSource
 import eu.kanade.tachiyomi.source.entry.EntryFilterList
 import eu.kanade.tachiyomi.source.entry.EntryHttpSource
 import eu.kanade.tachiyomi.source.entry.EntryMedia
 import eu.kanade.tachiyomi.source.entry.EntryPageResult
+import eu.kanade.tachiyomi.source.entry.EntryRefresh
 import eu.kanade.tachiyomi.source.entry.EntryType
 import eu.kanade.tachiyomi.source.entry.PlaybackSelection
+import eu.kanade.tachiyomi.source.entry.RelatedEntriesSource
+import eu.kanade.tachiyomi.source.entry.RelatedEntryGroup
 import eu.kanade.tachiyomi.source.entry.SEntry
 import eu.kanade.tachiyomi.source.entry.SEntryChapter
 import eu.kanade.tachiyomi.source.entry.SourceMetadata
 import okhttp3.Headers
 import okhttp3.OkHttpClient
 
-internal class NovelBuddySource : EntryHttpSource(), ChapterWebViewSource, SourceMetadata {
+internal class NovelBuddySource :
+    EntryHttpSource(),
+    ChapterWebViewSource,
+    RelatedEntriesSource,
+    SourceMetadata {
     override val id: Long = BuildConfig.SOURCE_ID_NOVELBUDDY
     override val name: String = "NovelBuddy"
     override val lang: String = "en"
@@ -54,17 +62,31 @@ internal class NovelBuddySource : EntryHttpSource(), ChapterWebViewSource, Sourc
         filters: EntryFilterList,
     ): EntryPageResult<SEntry> = catalogue(page, filters.toNovelBuddySearchSelection(query))
 
-    override suspend fun getContentDetails(entry: SEntry): SEntry {
-        val key = entry.url.toNovelBuddyTitleKey()
-            ?: error("Invalid NovelBuddy BOOK identity: ${entry.url}")
-        return api.title(key.slug).toSEntry().also { it.initialized = true }
+    override suspend fun refresh(
+        entry: SEntry,
+        existingChapters: List<SEntryChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): EntryRefresh {
+        if (!fetchDetails && !fetchChapters) return EntryRefresh(entry, existingChapters)
+        val key = entry.url.toNovelBuddyTitleKey() ?: error("Invalid NovelBuddy BOOK identity: ${entry.url}")
+        val title = api.title(key.slug)
+        val details = if (fetchDetails) title.applyTo(entry) else entry
+        if (!fetchChapters) return EntryRefresh(details, existingChapters)
+        title.newestChaptersOver(key, existingChapters)?.let { newest ->
+            return EntryRefresh(details, newest, rest = ChapterListRest.Unchanged)
+        }
+        return EntryRefresh(details, api.chapters(key.id, title.cv).toSEntryChapters(key))
     }
 
-    override suspend fun getChapterList(entry: SEntry): List<SEntryChapter> {
-        val key = entry.url.toNovelBuddyTitleKey()
-            ?: error("Invalid NovelBuddy BOOK identity: ${entry.url}")
-        val cacheVersion = api.title(key.slug).cv
-        return api.chapters(key.id, cacheVersion).map { it.toSEntryChapter(key.id, key.slug) }
+    override suspend fun getRelatedEntries(entry: SEntry): List<RelatedEntryGroup> {
+        val key = entry.url.toNovelBuddyTitleKey() ?: error("Invalid NovelBuddy BOOK identity: ${entry.url}")
+        val related = api.recommendations(key.id)
+            .filter { it.id != key.id }
+            .distinctBy(NovelBuddyTitle::id)
+            .map(NovelBuddyTitle::toSEntry)
+        // The site's one list of them, "You may also like", doesn't say how they relate
+        return if (related.isEmpty()) emptyList() else listOf(RelatedEntryGroup(title = null, entries = related))
     }
 
     override suspend fun getMedia(chapter: SEntryChapter, selection: PlaybackSelection): EntryMedia {

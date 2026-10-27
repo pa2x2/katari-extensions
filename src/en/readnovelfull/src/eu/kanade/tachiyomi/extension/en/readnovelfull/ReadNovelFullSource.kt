@@ -1,11 +1,13 @@
 package eu.kanade.tachiyomi.extension.en.readnovelfull
 
 import eu.kanade.tachiyomi.extension.BuildConfig
+import eu.kanade.tachiyomi.source.entry.ChapterListRest
 import eu.kanade.tachiyomi.source.entry.ChapterWebViewSource
 import eu.kanade.tachiyomi.source.entry.EntryFilterList
 import eu.kanade.tachiyomi.source.entry.EntryHttpSource
 import eu.kanade.tachiyomi.source.entry.EntryMedia
 import eu.kanade.tachiyomi.source.entry.EntryPageResult
+import eu.kanade.tachiyomi.source.entry.EntryRefresh
 import eu.kanade.tachiyomi.source.entry.EntryType
 import eu.kanade.tachiyomi.source.entry.PlaybackSelection
 import eu.kanade.tachiyomi.source.entry.SEntry
@@ -55,17 +57,23 @@ internal class ReadNovelFullSource : EntryHttpSource(), ChapterWebViewSource, So
         }
     }
 
-    override suspend fun getContentDetails(entry: SEntry): SEntry = ReadNovelFullParser
-        .parseDetails(api.document(entry.url))
-        .applyTo(entry)
-
-    override suspend fun getChapterList(entry: SEntry): List<SEntryChapter> {
-        val novelId = entry.readNovelFullNovelId() ?: ReadNovelFullParser
-            .parseDetails(api.document(entry.url))
-            .novelId
-            ?: error("ReadNovelFull returned no novel ID")
-        return ReadNovelFullParser.parseChapterArchive(api.chapterArchive(novelId))
-            .mapIndexed { index, chapter -> chapter.toSEntryChapter(index) }
+    override suspend fun refresh(
+        entry: SEntry,
+        existingChapters: List<SEntryChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): EntryRefresh {
+        if (!fetchDetails && !fetchChapters) return EntryRefresh(entry, existingChapters)
+        val page = ReadNovelFullParser.parseDetails(api.document(entry.url))
+        val details = if (fetchDetails) page.applyTo(entry) else entry
+        if (!fetchChapters) return EntryRefresh(details, existingChapters)
+        page.latestChapter?.aloneOver(existingChapters)?.let { latest ->
+            return EntryRefresh(details, latest, rest = ChapterListRest.Unchanged)
+        }
+        val novelId = page.novelId ?: entry.readNovelFullNovelId() ?: error("ReadNovelFull returned no novel ID")
+        val chapters = ReadNovelFullParser.parseChapterArchive(api.chapterArchive(novelId))
+            .toNewestFirstChapters(page.latestChapter)
+        return EntryRefresh(details, chapters)
     }
 
     override suspend fun getMedia(chapter: SEntryChapter, selection: PlaybackSelection): EntryMedia {

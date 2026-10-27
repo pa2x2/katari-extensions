@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.en.novelfull
 
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.awaitSuccess
+import eu.kanade.tachiyomi.network.get
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -12,7 +11,7 @@ internal class NovelFullApi(
     private val client: OkHttpClient,
     private val headers: Headers,
 ) {
-    suspend fun document(path: String): Document = client.newCall(GET(url(path), headers)).awaitSuccess().use {
+    suspend fun document(path: String): Document = client.get(url(path), headers).use {
         Jsoup.parse(it.body.string(), it.request.url.toString())
     }
 

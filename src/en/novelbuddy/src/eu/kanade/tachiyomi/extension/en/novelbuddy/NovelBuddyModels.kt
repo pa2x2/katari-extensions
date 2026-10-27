@@ -2,11 +2,10 @@ package eu.kanade.tachiyomi.extension.en.novelbuddy
 
 import eu.kanade.tachiyomi.source.entry.EntryType
 import eu.kanade.tachiyomi.source.entry.SEntry
-import eu.kanade.tachiyomi.source.entry.SEntryChapter
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import org.jsoup.Jsoup
-import java.time.Instant
+import org.jsoup.parser.Parser
 
 @Serializable
 internal data class NovelBuddySearchResponse(val data: NovelBuddySearchData)
@@ -36,6 +35,9 @@ internal data class NovelBuddyChapterResponse(val data: NovelBuddyChapterData)
 internal data class NovelBuddyChapterData(val chapter: NovelBuddyChapterContent)
 
 @Serializable
+internal data class NovelBuddyRecommendationsResponse(val data: List<NovelBuddyTitle>)
+
+@Serializable
 internal data class NovelBuddyTitle(
     val id: String,
     val name: String,
@@ -47,6 +49,8 @@ internal data class NovelBuddyTitle(
     val genres: List<NovelBuddyNamedValue> = emptyList(),
     val tags: List<NovelBuddyNamedValue> = emptyList(),
     val authors: List<NovelBuddyNamedValue> = emptyList(),
+    /** With details, the newest chapters, newest first: the head of the whole chapter list. */
+    val chapters: List<NovelBuddyChapter> = emptyList(),
 )
 
 @Serializable
@@ -72,35 +76,39 @@ internal typealias NovelBuddyChapterContent = NovelBuddyChapter
 
 internal fun NovelBuddyTitle.toSEntry(): SEntry = SEntry.create().apply {
     url = titleUrl(id, slug)
-    title = name
-    author = authors.map(NovelBuddyNamedValue::name)
+    applyTitle(this@toSEntry)
+}
+
+internal fun NovelBuddyTitle.applyTo(entry: SEntry): SEntry = entry.copy().apply {
+    applyTitle(this@applyTo)
+    initialized = true
+}
+
+private fun SEntry.applyTitle(source: NovelBuddyTitle) {
+    title = source.name.decodeNovelBuddyText()
+    author = source.authors.map(NovelBuddyNamedValue::name)
         .map(String::trim)
         .filter(String::isNotBlank)
         .distinct()
         .joinToString()
         .ifBlank { null }
-    description = summary?.let(Jsoup::parse)?.text()?.trim()?.ifBlank { null }
-    genre = (genres + tags).map(NovelBuddyNamedValue::name)
+    description = source.summary?.let(Jsoup::parse)?.text()?.trim()?.ifBlank { null }
+    genre = (source.genres + source.tags).map(NovelBuddyNamedValue::name)
         .map(String::trim)
         .filter(String::isNotBlank)
         .distinct()
         .takeIf(List<String>::isNotEmpty)
-    status = when (this@toSEntry.status?.lowercase()?.replace(" ", "")) {
+    status = when (source.status?.lowercase()?.replace(" ", "")) {
         "ongoing" -> SEntry.ONGOING
         "completed", "complete" -> SEntry.COMPLETED
         else -> SEntry.UNKNOWN
     }
-    thumbnailUrl = cover
+    thumbnailUrl = source.cover
     type = EntryType.BOOK
 }
 
-internal fun NovelBuddyChapter.toSEntryChapter(titleId: String, titleSlug: String): SEntryChapter =
-    SEntryChapter.create().apply {
-        url = novelBuddyChapterUrl(titleId, titleSlug, id, slug)
-        name = this@toSEntryChapter.name
-        chapterNumber = number ?: -1.0
-        dateUpload = updatedAt?.let { runCatching { Instant.parse(it).toEpochMilli() }.getOrNull() } ?: 0L
-    }
+/** Names come HTML-escaped, such as `God&#039;s Domain`. */
+internal fun String.decodeNovelBuddyText(): String = Parser.unescapeEntities(this, false).trim()
 
 internal fun titleUrl(id: String, slug: String): String = "/titles/$id-$slug"
 

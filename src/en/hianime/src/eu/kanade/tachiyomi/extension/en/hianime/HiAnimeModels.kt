@@ -1,6 +1,8 @@
 package eu.kanade.tachiyomi.extension.en.hianime
 
+import eu.kanade.tachiyomi.source.entry.ChapterKind
 import eu.kanade.tachiyomi.source.entry.EntryType
+import eu.kanade.tachiyomi.source.entry.RelatedEntryGroup
 import eu.kanade.tachiyomi.source.entry.SEntry
 import eu.kanade.tachiyomi.source.entry.SEntryChapter
 import kotlinx.serialization.json.buildJsonObject
@@ -27,6 +29,7 @@ internal data class HiAnimeDetails(
     val studios: List<String>,
     val producers: List<String>,
     val thumbnailUrl: String?,
+    val backgroundUrl: String?,
 )
 
 internal data class HiAnimeChapter(
@@ -34,6 +37,12 @@ internal data class HiAnimeChapter(
     val url: String,
     val name: String,
     val number: Double,
+    val filler: Boolean,
+)
+
+internal data class HiAnimeRelatedGroup(
+    val title: String,
+    val entries: List<HiAnimeEntry>,
 )
 
 internal data class HiAnimeServer(
@@ -67,6 +76,7 @@ internal fun HiAnimeDetails.applyTo(entry: SEntry): SEntry = entry.copy().apply 
     genre = genres.takeIf(List<String>::isNotEmpty)
     status = this@applyTo.status.toHiAnimeStatus()
     thumbnailUrl = this@applyTo.thumbnailUrl ?: entry.thumbnailUrl
+    backgroundUrl = this@applyTo.backgroundUrl
     memo = buildJsonObject {
         entry.memo.forEach { (key, value) -> put(key, value) }
         animeId?.let { put(ANIME_ID_MEMO_KEY, it) }
@@ -80,7 +90,11 @@ internal fun HiAnimeChapter.toSEntryChapter(): SEntryChapter = SEntryChapter.cre
     name = this@toSEntryChapter.name
     dateUpload = 0L
     chapterNumber = number
+    kind = if (filler) ChapterKind.FILLER else ChapterKind.REGULAR
 }
+
+internal fun HiAnimeRelatedGroup.toRelatedEntryGroup(): RelatedEntryGroup =
+    RelatedEntryGroup(title = title, entries = entries.map(HiAnimeEntry::toSEntry))
 
 internal fun SEntry.hiAnimeId(): String? = memo[ANIME_ID_MEMO_KEY]
     ?.jsonPrimitive
@@ -96,6 +110,7 @@ internal fun String.hiAnimeId(): String? = substringBefore('?')
 private fun String?.toHiAnimeStatus(): Int = when (this?.trim()?.lowercase()) {
     "finished airing" -> SEntry.COMPLETED
     "currently airing" -> SEntry.ONGOING
+    "not yet aired" -> SEntry.UPCOMING
     else -> SEntry.UNKNOWN
 }
 

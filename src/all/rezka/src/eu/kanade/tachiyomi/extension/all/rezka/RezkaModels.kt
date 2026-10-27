@@ -1,12 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.rezka
 
-internal data class SeriesInitArgs(
-    val postId: Int,
-    val translatorId: Int,
-    val seasonId: Int,
-    val episodeId: Int,
-)
-
 internal data class SeasonData(
     val label: String?,
     val seasonNumber: Int,
@@ -19,14 +12,16 @@ internal data class EpisodeData(
     val seasonNumber: Int?,
     val seasonLabel: String?,
     val title: String,
+    val episodeTitle: String?,
     val localEpisodeNumber: Double?,
     val uploadDate: Long,
 )
 
-internal data class ScheduledEpisodeDate(
+internal data class ScheduledEpisode(
     val seasonNumber: Int,
     val episodeNumber: Int,
-    val airDate: Long,
+    val title: String?,
+    val airDate: Long?,
 )
 
 internal data class EpisodeArgs(

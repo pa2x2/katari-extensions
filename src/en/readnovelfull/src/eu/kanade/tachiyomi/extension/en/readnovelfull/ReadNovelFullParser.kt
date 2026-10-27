@@ -13,15 +13,22 @@ internal object ReadNovelFullParser {
     fun parseDetails(document: Document): ReadNovelFullDetails = ReadNovelFullDetails(
         novelId = document.selectFirst("#rating[data-novel-id]")?.attr("data-novel-id")?.trim()?.ifBlank { null },
         title = document.selectFirst("#novel .books .title")?.text()?.trim()?.ifBlank { null },
-        author = document.metadataLinks("Author:").firstOrNull(),
+        author = document.metadataLinks("Author:").joinToString().ifBlank { null },
         description = document.selectFirst("#novel .desc-text")?.text()?.trim()?.ifBlank { null },
         genres = document.metadataLinks("Genre:"),
         status = document.metadataLinks("Status:").firstOrNull(),
         thumbnailUrl = document.selectFirst("#novel .info-holder .book img[src]")
             ?.attr("abs:src")
             ?.ifBlank { null },
+        latestChapter = document.selectFirst("#novel .l-chapter .item-value a[href]")?.let { link ->
+            ReadNovelFullLatestChapter(
+                chapter = ReadNovelFullChapter(url = link.entryPath(), name = link.text().trim()),
+                timeText = link.closest(".item")?.selectFirst(".item-time")?.text()?.trim()?.ifBlank { null },
+            )
+        },
     )
 
+    /** Every chapter, oldest first as the site's archive lists them. */
     fun parseChapterArchive(document: Document): List<ReadNovelFullChapter> = document
         .select(".list-chapter a[href]")
         .map { link ->

@@ -5,13 +5,19 @@ import okhttp3.Response
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 
-/** Serializes HiAnime requests and retries a single rate-limited request. */
+/**
+ * Serializes HiAnime page and API requests and retries a single rate-limited request. Covers and banners under
+ * `/storage/` are cached static files that Katari loads with this client too, so they are not throttled.
+ */
 internal class HiAnimeThrottleInterceptor : Interceptor {
     private val lock = Any()
     private var nextRequestAtMillis = 0L
 
     override fun intercept(chain: Interceptor.Chain): Response {
-        if (chain.request().url.host != HIANIME_HOST) return chain.proceed(chain.request())
+        val url = chain.request().url
+        if (url.host != HIANIME_HOST || url.encodedPath.startsWith(STATIC_PATH_PREFIX)) {
+            return chain.proceed(chain.request())
+        }
 
         return synchronized(lock) {
             waitUntilAllowed()
@@ -44,6 +50,7 @@ internal class HiAnimeThrottleInterceptor : Interceptor {
 
     private companion object {
         const val HIANIME_HOST = "hianime.at"
+        const val STATIC_PATH_PREFIX = "/storage/"
         const val TOO_MANY_REQUESTS = 429
         const val RETRY_AFTER_HEADER = "Retry-After"
         const val REQUEST_INTERVAL_MILLIS = 1_000L

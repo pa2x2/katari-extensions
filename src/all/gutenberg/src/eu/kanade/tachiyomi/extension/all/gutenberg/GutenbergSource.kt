@@ -34,16 +34,19 @@ internal class GutenbergSource : EntryHttpSource(), SourceMetadata, Configurable
         return http.document("/ebooks/$id").gutenbergBook(id)
     }
 
-    override suspend fun getContentDetails(entry: SEntry): SEntry = book(entry.url).entry
-
-    override suspend fun getChapterList(entry: SEntry): List<SEntryChapter> {
+    override suspend fun refresh(
+        entry: SEntry,
+        existingChapters: List<SEntryChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): EntryRefresh {
+        if (!fetchDetails && !fetchChapters) return EntryRefresh(entry, existingChapters)
+        // Details and the single reading chapter both come from the book page.
         val book = book(entry.url)
-        return listOf(SEntryChapter.create().apply {
-            url = "${book.entry.url}#read"
-            name = "Read book"
-            chapterNumber = 1.0
-            dateUpload = book.uploaded
-        })
+        return EntryRefresh(
+            entry = if (fetchDetails) book.entry else entry,
+            chapters = if (fetchChapters) listOf(book.readChapter()) else existingChapters,
+        )
     }
 
     override suspend fun getMedia(chapter: SEntryChapter, selection: PlaybackSelection): EntryMedia {
@@ -56,9 +59,8 @@ internal class GutenbergSource : EntryHttpSource(), SourceMetadata, Configurable
         }
     }
 
-    override suspend fun getRelatedEntries(entry: SEntry): List<SEntry> =
-        http.document("/ebooks/${gutenbergId(entry.url) ?: error("Invalid Project Gutenberg entry")}/also/")
-            .gutenbergListing().items
+    override suspend fun getRelatedEntries(entry: SEntry): List<RelatedEntryGroup> =
+        http.relatedGroups(book(entry.url))
 
     override fun getChapterUrl(chapter: SEntryChapter): String =
         "$baseUrl/ebooks/${gutenbergId(chapter.url) ?: error("Invalid Project Gutenberg entry") }"
@@ -70,8 +72,7 @@ internal class GutenbergSource : EntryHttpSource(), SourceMetadata, Configurable
     }
 
     override suspend fun getEntry(uri: String): SEntry? = gutenbergId(uri)?.let { book(uri).entry }
-    override suspend fun getChapter(uri: String): SEntryChapter? =
-        getEntry(uri)?.let { getChapterList(it).single() }
+    override suspend fun getChapter(uri: String): SEntryChapter? = gutenbergId(uri)?.let { book(uri).readChapter() }
 
     override fun setupPreferenceScreen(screen: EntryPreferenceScreen) {
         screen.addPreference(ListPreference(screen.context).apply {

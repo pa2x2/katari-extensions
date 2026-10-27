@@ -25,6 +25,7 @@ internal object HiAnimeParser {
         }
         val overview = metadata["overview"]?.selectFirst(".text")?.cleanText()
             ?: document.selectFirst(".anisc-detail .film-description .text")?.cleanText()
+        val thumbnailUrl = document.selectFirst(".anis-content .film-poster img, .anisc-poster img")?.imageUrl()
 
         return HiAnimeDetails(
             animeId = document.location().hiAnimeId(),
@@ -43,8 +44,9 @@ internal object HiAnimeParser {
             score = metadata["mal score"]?.metadataText(),
             studios = metadata["studios"]?.select("a")?.eachText().orEmpty().cleanValues(),
             producers = metadata["producers"]?.select("a")?.eachText().orEmpty().cleanValues(),
-            thumbnailUrl = document.selectFirst(".anis-content .film-poster img, .anisc-poster img")
-                ?.imageUrl(),
+            thumbnailUrl = thumbnailUrl,
+            backgroundUrl = document.selectFirst(".anis-cover[style]")?.backgroundImageUrl()
+                ?.takeIf { it != thumbnailUrl },
         )
     }
 
@@ -61,6 +63,7 @@ internal object HiAnimeParser {
                 url = url,
                 name = item.selectFirst(".ep-name")?.text()?.trim().orEmpty().ifBlank { "Episode $number" },
                 number = number,
+                filler = item.hasClass("ssl-item-filler") || item.selectFirst(".ssli-filler") != null,
             )
         }
         .sortedByDescending(HiAnimeChapter::number)
@@ -76,11 +79,34 @@ internal object HiAnimeParser {
             HiAnimeServer(type, name, name.toOptionKey(), url)
         }
 
-    fun parseRelated(document: Document): List<HiAnimeEntry> {
-        val section = document.select("section").firstOrNull {
-            it.selectFirst(".cat-heading")?.text()?.contains("Recommended", ignoreCase = true) == true
-        } ?: return emptyList()
-        return section.select(".film_list-wrap .flw-item").mapNotNull(::listingEntry)
+    /**
+     * The detail page's "More Seasons", "Related Anime" and "Recommended For You" sections, in that order, each
+     * titled with the site's heading. The page's own entry and its generic "Most Popular" sidebar are left out.
+     */
+    fun parseRelated(document: Document): List<HiAnimeRelatedGroup> {
+        val ownPath = document.location().toEntryPath()
+        val sections = document.select("section").mapNotNull { section ->
+            val heading = section.selectFirst(".cat-heading")?.text()?.trim()?.ifBlank { null }
+                ?: return@mapNotNull null
+            val order = RELATED_HEADINGS.indexOfFirst { heading.contains(it, ignoreCase = true) }
+            if (order < 0) return@mapNotNull null
+            val entries = (section.select(".os-list a.os-item[href]").mapNotNull(::seasonEntry) +
+                section.select(".film_list-wrap .flw-item, .anif-block-ul li").mapNotNull(::listingEntry))
+                .filter { it.url != ownPath }
+                .distinctBy(HiAnimeEntry::url)
+            if (entries.isEmpty()) null else order to HiAnimeRelatedGroup(heading, entries)
+        }
+        return sections.sortedBy { it.first }.map { it.second }.distinctBy(HiAnimeRelatedGroup::title)
+    }
+
+    private fun seasonEntry(item: Element): HiAnimeEntry? {
+        val url = item.attr("abs:href").toEntryPath() ?: item.attr("href").toEntryPath() ?: return null
+        return HiAnimeEntry(
+            url = url,
+            title = item.attr("title").trim().ifBlank { item.selectFirst(".title")?.text()?.trim().orEmpty() }
+                .ifBlank { return null },
+            thumbnailUrl = item.selectFirst(".season-poster[style]")?.backgroundImageUrl(),
+        )
     }
 
     private fun listingEntry(item: Element): HiAnimeEntry? {
@@ -112,6 +138,13 @@ internal object HiAnimeParser {
         .ifBlank { attr("src") }
         .ifBlank { attr("data-src") }
         .ifBlank { null }
+
+    private fun Element.backgroundImageUrl(): String? = BACKGROUND_IMAGE_REGEX.find(attr("style"))
+        ?.groupValues
+        ?.get(2)
+        ?.trim()
+        ?.ifBlank { null }
+        ?.let { url -> if (url.startsWith("/")) "https://$HIANIME_HOST$url" else url }
 
     private fun List<String>.cleanValues(): List<String> = map(String::trim)
         .filter(String::isNotBlank)
@@ -145,4 +178,6 @@ internal object HiAnimeParser {
 
     private const val HIANIME_HOST = "hianime.at"
     private val DETAIL_PATH_REGEX = Regex("/[^/?]+-\\d+")
+    private val BACKGROUND_IMAGE_REGEX = Regex("background-image:\\s*url\\((['\"]?)(.+?)\\1\\)")
+    private val RELATED_HEADINGS = listOf("Seasons", "Related", "Recommended")
 }

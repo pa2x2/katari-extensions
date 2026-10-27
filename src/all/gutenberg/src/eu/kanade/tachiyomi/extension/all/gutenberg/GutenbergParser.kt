@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.extension.all.gutenberg
 import eu.kanade.tachiyomi.source.entry.EntryPageResult
 import eu.kanade.tachiyomi.source.entry.EntryType
 import eu.kanade.tachiyomi.source.entry.SEntry
+import eu.kanade.tachiyomi.source.entry.SEntryChapter
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Document
 import java.time.LocalDate
@@ -31,7 +32,20 @@ internal fun Document.gutenbergListing(): EntryPageResult<SEntry> {
     return EntryPageResult(items, select("a[accesskey=+]").any { it.text().trim() == "Next" })
 }
 
-internal data class GutenbergBook(val entry: SEntry, val formats: List<GutenbergFormat>, val uploaded: Long)
+/** The page heading of a listing, such as "Readers also downloaded" or "Books by Carroll, Lewis". */
+internal fun Document.gutenbergHeading(): String? =
+    (selectFirst(".page_content h1") ?: selectFirst("h1"))?.text()?.trim()?.ifBlank { null }
+
+/**
+ * @property relatedPaths listings the book page links as related, in the site's order: "Readers also downloaded",
+ * then the authors' pages, then the bookshelves.
+ */
+internal data class GutenbergBook(
+    val entry: SEntry,
+    val formats: List<GutenbergFormat>,
+    val uploaded: Long,
+    val relatedPaths: List<String>,
+)
 internal data class GutenbergFormat(val url: String, val mime: String, val label: String)
 
 internal fun Document.gutenbergBook(id: String): GutenbergBook {
@@ -78,5 +92,28 @@ internal fun Document.gutenbergBook(id: String): GutenbergBook {
         LocalDate.parse(date, java.time.format.DateTimeFormatter.ofPattern("MMM d, uuuu", java.util.Locale.ENGLISH))
             .atStartOfDay().toInstant(ZoneOffset.UTC).toEpochMilli()
     }.getOrDefault(0)
-    return GutenbergBook(entry, formats, uploaded)
+    return GutenbergBook(entry, formats, uploaded, relatedPaths(id))
 }
+
+/** The whole book is one chapter; its identity stays `/ebooks/<id>#read`. */
+internal fun GutenbergBook.readChapter(): SEntryChapter = SEntryChapter.create().apply {
+    url = "${entry.url}#read"
+    name = "Read book"
+    chapterNumber = 1.0
+    dateUpload = uploaded
+}
+
+private fun Document.relatedPaths(id: String): List<String> {
+    fun paths(selector: String, pattern: Regex): List<String> = select(selector).mapNotNull { link ->
+        runCatching { gutenbergUrl(link.absUrl("href")).toHttpUrl().encodedPath }.getOrNull()
+            ?.let(pattern::matchEntire)?.value
+    }.distinct()
+    val also = paths(".similar-books-tags a[href]", Regex("/ebooks/$id/also/?")).ifEmpty { listOf("/ebooks/$id/also/") }
+    val authors = paths("table.bibrec a[rel=marcrel:aut][href]", Regex("/ebooks/author/[0-9]+"))
+    val shelves = paths(".similar-books-tags a[href]", Regex("/ebooks/bookshelf/[0-9]+"))
+    return also.take(1) + authors.take(MAX_RELATED_AUTHORS) + shelves.take(MAX_RELATED_SHELVES)
+}
+
+// Each listing is one throttled request, so a book with many authors or shelves shows only the first few.
+private const val MAX_RELATED_AUTHORS = 2
+private const val MAX_RELATED_SHELVES = 3

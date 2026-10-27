@@ -5,12 +5,20 @@ import okhttp3.Response
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 
-/** Serializes catalogue requests and retries a single rate-limited request. */
+/**
+ * Serializes page and API requests and retries a single rate-limited request. Covers under `/storage/`, which Katari
+ * loads through the source's client, pass straight through like a browser loads them.
+ */
 internal class BrightNovelsThrottleInterceptor : Interceptor {
     private val lock = Any()
     private var nextRequestAtMillis = 0L
 
-    override fun intercept(chain: Interceptor.Chain): Response = synchronized(lock) {
+    override fun intercept(chain: Interceptor.Chain): Response {
+        if (chain.request().url.encodedPath.startsWith(STORAGE_PATH)) return chain.proceed(chain.request())
+        return throttled(chain)
+    }
+
+    private fun throttled(chain: Interceptor.Chain): Response = synchronized(lock) {
         waitUntilAllowed()
         var response = chain.proceed(chain.request())
         if (response.code == TOO_MANY_REQUESTS) {
@@ -43,5 +51,6 @@ internal class BrightNovelsThrottleInterceptor : Interceptor {
         const val TOO_MANY_REQUESTS = 429
         const val RETRY_AFTER_HEADER = "Retry-After"
         const val REQUEST_INTERVAL_MILLIS = 2_000L
+        const val STORAGE_PATH = "/storage/"
     }
 }
